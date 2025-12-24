@@ -1,0 +1,22 @@
+[project]
+name = "pinn"
+version = "0.1.0"
+description = "Physics-Informed Neural Networks for PDE solving"
+requires-python = ">=3.12"
+
+dependencies = [
+    "torch",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "jupyter",
+    "ipykernel",
+    "tqdm",
+    "pandas>=2.3.3",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "black",
+    "ruff"
+]
