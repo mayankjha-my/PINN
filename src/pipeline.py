@@ -77,3 +77,6 @@ if __name__ == "__main__":
     pipeline = PINNPipeline(epochs=500)
     pipeline.run_training()
 
+
+
+# uv run python src/pipeline.py

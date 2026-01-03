@@ -171,33 +171,33 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 
-def estimate_k_from_model(model, z_levels=[-0.2, -0.5, -1.0]):
+# def estimate_k_from_model(model, z_levels=[-0.2, -0.5, -1.0]):
     
-    k_list = []
+#     k_list = []
 
-    for z0 in z_levels:
+#     for z0 in z_levels:
 
-        r = torch.linspace(-1, 1, 300).reshape(-1,1)
-        z = torch.full_like(r, z0)
+#         r = torch.linspace(-1, 1, 300).reshape(-1,1)
+#         z = torch.full_like(r, z0)
 
-        with torch.no_grad():
-            u = model(torch.cat([r,z],dim=1)).numpy().flatten()
+#         with torch.no_grad():
+#             u = model(torch.cat([r,z],dim=1)).numpy().flatten()
 
-        r = r.numpy().flatten()
+#         r = r.numpy().flatten()
 
-        u = u - np.mean(u)   # remove DC bias
+#         u = u - np.mean(u)   # remove DC bias
 
-        def sinusoid(x, A, k, phi):
-            return A*np.sin(k*x + phi)
+#         def sinusoid(x, A, k, phi):
+#             return A*np.sin(k*x + phi)
 
-        try:
-            params, _ = curve_fit(sinusoid, r, u, p0=[1.0, 2.0, 0.0])
-            A,k,phi = params
-            k_list.append(abs(k))
-        except:
-            continue
+#         try:
+#             params, _ = curve_fit(sinusoid, r, u, p0=[1.0, 2.0, 0.0])
+#             A,k,phi = params
+#             k_list.append(abs(k))
+#         except:
+#             continue
 
-    return np.mean(k_list)
+#     return np.mean(k_list)
 
 
 
