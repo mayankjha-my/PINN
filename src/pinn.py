@@ -91,28 +91,55 @@ def sample_domain(N=200):
     return r, z
 
 
-def train_pinn(epochs=8000, omega=2.0, lr=1e-3):
+# def train_pinn(epochs=8000, omega=2.0, lr=1e-3):
+
+#     model = MLP()
+#     opt = torch.optim.Adam(model.parameters(), lr=lr)
+
+#     for e in range(epochs):
+
+#         r, z = sample_domain()
+
+#         loss_pde = pde_residual(model, r, z, omega)
+#         loss_bc = boundary_loss(model)
+
+#         loss = loss_pde + loss_bc
+
+#         opt.zero_grad()
+#         loss.backward()
+#         opt.step()
+
+#         if e % 500 == 0:
+#             print(f"Epoch {e}  PDE={loss_pde.item():.4e}  BC={loss_bc.item():.4e}")
+
+#     return model
+
+
+def train_pinn(epochs=12000, omega=2.0, lr=1e-3):
 
     model = MLP()
     opt = torch.optim.Adam(model.parameters(), lr=lr)
 
     for e in range(epochs):
 
-        r, z = sample_domain()
+        r = torch.rand(800,1)*2 - 1
+        z = torch.rand(800,1)*-2
 
         loss_pde = pde_residual(model, r, z, omega)
         loss_bc = boundary_loss(model)
 
-        loss = loss_pde + loss_bc
+        loss = loss_pde + 5.0*loss_bc   # stronger BC weight
 
         opt.zero_grad()
         loss.backward()
         opt.step()
 
-        if e % 500 == 0:
-            print(f"Epoch {e}  PDE={loss_pde.item():.4e}  BC={loss_bc.item():.4e}")
+        if e==6000:
+            for g in opt.param_groups:
+                g['lr'] = 1e-4
 
     return model
+
 
 
 
@@ -121,20 +148,78 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 
-def estimate_k_from_model(model, z_level=0.0):
+# def estimate_k_from_model(model, z_level=0.0):
 
-    r = torch.linspace(-1, 1, 200).reshape(-1, 1)
-    z = torch.full_like(r, z_level)
+#     r = torch.linspace(-1, 1, 200).reshape(-1, 1)
+#     z = torch.full_like(r, z_level)
+
+#     with torch.no_grad():
+#         u = model(torch.cat([r, z], dim=1)).numpy().flatten()
+
+#     r = r.numpy().flatten()
+
+#     def sinusoid(x, A, k, phi):
+#         return A * np.sin(k * x + phi)
+
+#     params, _ = curve_fit(sinusoid, r, u, p0=[1.0, 2.0, 0.0])
+
+#     A, k, phi = params
+#     return abs(k)
+
+import torch
+import numpy as np
+from scipy.optimize import curve_fit
+
+
+def estimate_k_from_model(model, z_levels=[-0.2, -0.5, -1.0]):
+    
+    k_list = []
+
+    for z0 in z_levels:
+
+        r = torch.linspace(-1, 1, 300).reshape(-1,1)
+        z = torch.full_like(r, z0)
+
+        with torch.no_grad():
+            u = model(torch.cat([r,z],dim=1)).numpy().flatten()
+
+        r = r.numpy().flatten()
+
+        u = u - np.mean(u)   # remove DC bias
+
+        def sinusoid(x, A, k, phi):
+            return A*np.sin(k*x + phi)
+
+        try:
+            params, _ = curve_fit(sinusoid, r, u, p0=[1.0, 2.0, 0.0])
+            A,k,phi = params
+            k_list.append(abs(k))
+        except:
+            continue
+
+    return np.mean(k_list)
+
+
+
+import torch
+import numpy as np
+
+def estimate_k_from_model(model, z0=-0.5):
+
+    r = torch.linspace(-1, 1, 400).reshape(-1,1)
+    z = torch.full_like(r, z0)
 
     with torch.no_grad():
-        u = model(torch.cat([r, z], dim=1)).numpy().flatten()
+        u = model(torch.cat([r,z],dim=1)).numpy().flatten()
 
-    r = r.numpy().flatten()
+    u = u - np.mean(u)
 
-    def sinusoid(x, A, k, phi):
-        return A * np.sin(k * x + phi)
+    U = np.fft.rfft(u)
+    freqs = np.fft.rfftfreq(len(u), d=(r[1]-r[0]).item())
 
-    params, _ = curve_fit(sinusoid, r, u, p0=[1.0, 2.0, 0.0])
+    k_index = np.argmax(np.abs(U[1:])) + 1
+    k = 2*np.pi*freqs[k_index]
 
-    A, k, phi = params
     return abs(k)
+
+
