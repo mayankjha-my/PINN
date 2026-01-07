@@ -1,5 +1,5 @@
 import torch
-from utils import gradients
+from .utils import gradients
 
 
 def residual_medium1(model, xyt, params):

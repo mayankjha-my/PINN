@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 
-from pde_residuals import (
+from .pde_residuals import (
     residual_medium1,
     residual_medium2,
     residual_medium3
 )
 
-from boundary_conditions import (
+from .boundary_conditions import (
     top_surface_open_bc,
     top_surface_short_bc,
     interface_fgpm_hydro,

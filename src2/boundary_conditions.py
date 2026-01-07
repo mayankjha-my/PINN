@@ -1,5 +1,5 @@
 import torch
-from utils import gradients
+from .utils import gradients
 
 
 def top_surface_open_bc(model1, xt_top, material_params):
