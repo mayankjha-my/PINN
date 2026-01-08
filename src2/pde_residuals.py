@@ -112,48 +112,53 @@ def residual_medium2(model, xyt, params):
 
 
 def residual_medium3(model, xyt, params):
-    """
-    Viscoelastic substrate governing equations
-    """
 
     xyt.requires_grad_(True)
-
     pred = model(xyt)
-    w = pred[:, 0:1]
+
+    w   = pred[:, 0:1]
     phi = pred[:, 1:2]
 
+    x = xyt[:, 0:1]
+
+    # material properties
+    alpha3 = params["alpha3"]
+    C44   = params["C44"]   * (1 - torch.sin(params["alpha3"] * x))
+    eta44 = params["eta44"] * (1 - torch.sin(params["alpha3"] * x))
+    rho   = params["rho"]   * (1 - torch.sin(params["alpha3"] * x))
+    sig22 = params["sigma22"] * (1 - torch.sin(params["alpha3"] * x))
+
     # derivatives
-    grads_w = gradients(w, xyt)
-    w_x = grads_w[:, 0:1]
-    w_y = grads_w[:, 1:2]
-    w_t = grads_w[:, 2:3]
+    w_x = gradients(w, xyt)[:, 0:1]
+    w_y = gradients(w, xyt)[:, 1:2]
+    w_t = gradients(w, xyt)[:, 2:3]
 
     w_xx = gradients(w_x, xyt)[:, 0:1]
     w_yy = gradients(w_y, xyt)[:, 1:2]
     w_tt = gradients(w_t, xyt)[:, 2:3]
 
-    grads_phi = gradients(phi, xyt)
-    phi_x = grads_phi[:, 0:1]
-    phi_y = grads_phi[:, 1:2]
+    w_xt = gradients(w_x, xyt)[:, 2:3]
+    w_yt = gradients(w_y, xyt)[:, 2:3]
 
-    phi_xx = gradients(phi_x, xyt)[:, 0:1]
-    phi_yy = gradients(phi_y, xyt)[:, 1:2]
+    C44_x = gradients(C44, xyt)[:, 0:1]
+    eta44_x = gradients(eta44, xyt)[:, 0:1]
 
-    # material params
-    rho = params["rho"]
-    sig22 = params["sigma22"]
-
-    # ------------------ Residual 1 ------------------
-    # tau_zx and tau_zy will later be computed constitutively.
-    # For now we use the PDE form:
+    # mechanical residual
     r1 = (
-        w_xx
-        + w_yy
-        + (sig22) * w_yy
+        C44_x * w_x
+        + C44 * w_xx
+        + eta44_x * w_xt
+        + eta44 * gradients(w_xt, xyt)[:, 2:3]
+        + C44 * w_yy
+        + eta44 * w_yt
+        + sig22 * w_yy
         - rho * w_tt
     )
 
-    # ------------------ Residual 2 ------------------
+    # electric residual
+    phi_xx = gradients(gradients(phi, xyt)[:, 0:1], xyt)[:, 0:1]
+    phi_yy = gradients(gradients(phi, xyt)[:, 1:2], xyt)[:, 1:2]
+
     r2 = phi_xx + phi_yy
 
     return r1, r2
