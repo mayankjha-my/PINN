@@ -18,7 +18,7 @@ def residual_medium1(model, xyt, params):
     grads_phi = gradients(phi, xyt)
 
     w_x = grads_w[:, 0:1]
-    w_y = grads_w[:, 1:2]
+    w_y = grads_w[:, 1:2] 
     w_t = grads_w[:, 2:3]
 
     phi_x = grads_phi[:, 0:1]
@@ -40,6 +40,10 @@ def residual_medium1(model, xyt, params):
     eps11 = params["eps11"]
     alpha = params["alpha"]
 
+    C0 = params["C44"]
+    E0 = params["e15"]
+
+
     # ------------------ Residual 1 ------------------
     r1 = (
         C44 * w_xx
@@ -47,13 +51,13 @@ def residual_medium1(model, xyt, params):
         + alpha * C44 * w_x
         + e15 * (phi_xx + phi_yy + alpha * phi_x)
         - rho * w_tt
-    )
+    ) / C0
 
     # ------------------ Residual 2 ------------------
     r2 = (
         e15 * (w_xx + w_yy + alpha * w_x)
         - eps11 * (phi_xx + phi_yy + alpha * phi_x)
-    )
+    )/ E0
 
     return r1, r2
 
@@ -106,7 +110,7 @@ def residual_medium2(model, xyt, params):
     # ------------------ Residual 2 ------------------
     rhs = -(F * Zf * Cf) / eps11
 
-    r2 = phi_xx + phi_yy - rhs
+    r2 = (phi_xx + phi_yy - rhs) / max(abs(rhs), 1.0)
 
     return r1, r2
 
@@ -127,6 +131,9 @@ def residual_medium3(model, xyt, params):
     eta44 = params["eta44"] * (1 - torch.sin(params["alpha3"] * x))
     rho   = params["rho"]   * (1 - torch.sin(params["alpha3"] * x))
     sig22 = params["sigma22"] * (1 - torch.sin(params["alpha3"] * x))
+    C0 = params["C44"]
+    E0 = params["eta44"]
+
 
     # derivatives
     w_x = gradients(w, xyt)[:, 0:1]
@@ -140,20 +147,25 @@ def residual_medium3(model, xyt, params):
     w_xt = gradients(w_x, xyt)[:, 2:3]
     w_yt = gradients(w_y, xyt)[:, 2:3]
 
+   
+    # correct viscoelastic derivatives
+    w_xxt = gradients(w_xx, xyt)[:, 2:3]   # ∂³w/(∂x²∂t)
+    w_yyt = gradients(w_yy, xyt)[:, 2:3]   # ∂³w/(∂y²∂t)
+
+
     C44_x = gradients(C44, xyt)[:, 0:1]
     eta44_x = gradients(eta44, xyt)[:, 0:1]
 
-    # mechanical residual
     r1 = (
-        C44_x * w_x
-        + C44 * w_xx
-        + eta44_x * w_xt
-        + eta44 * gradients(w_xt, xyt)[:, 2:3]
-        + C44 * w_yy
-        + eta44 * w_yt
-        + sig22 * w_yy
-        - rho * w_tt
-    )
+    C44_x * w_x
+    + C44 * w_xx
+    + C44 * w_yy
+    + sig22 * w_yy
+    + eta44_x * w_xt            # this term is correct
+    + eta44 * (w_xxt + w_yyt)   # ✅ correct viscoelastic term
+    - rho * w_tt
+)/ C0
+
 
     # electric residual
     phi_xx = gradients(gradients(phi, xyt)[:, 0:1], xyt)[:, 0:1]

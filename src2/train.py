@@ -5,7 +5,8 @@ from config import CONFIG
 from sampling import (
     sample_domain_points,
     sample_boundary_points,
-    sample_interface_points
+    sample_interface_points,
+    sample_substrate_far_boundary
 )
 from losses import total_loss
 
@@ -68,6 +69,10 @@ def train(
             n_interface, geom
         )
 
+        xyt_far_sub = sample_substrate_far_boundary(
+            n_boundary, geom
+        )
+
         # move to GPU if available
         xyt_fgpm = xyt_fgpm.to(DEVICE)
         xyt_hydro = xyt_hydro.to(DEVICE)
@@ -93,8 +98,9 @@ def train(
             params_sub,
             electrically_open=electrically_open,
             w_pde=1.0,
-            w_bc=1.0,
-            w_int=1.0
+            w_bc=5.0,
+            w_int=10.0,
+            w_far=20.0  
         )
 
         # ================= BACKPROP =================
@@ -110,6 +116,8 @@ def train(
                 f"Top BC = {logs['bc_top']:.2e} | "
                 f"Int1 = {logs['interface_1']:.2e} | "
                 f"Int2 = {logs['interface_2']:.2e}"
+                f"Far = {logs['far']:.2e}"
+
             )
 
         # ================= SAVE CHECKPOINT =================

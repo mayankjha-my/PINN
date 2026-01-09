@@ -11,7 +11,8 @@ from .boundary_conditions import (
     top_surface_open_bc,
     top_surface_short_bc,
     interface_fgpm_hydro,
-    interface_hydro_substrate
+    interface_hydro_substrate,
+    substrate_far_field_bc
 )
 
 
@@ -25,6 +26,7 @@ def compute_pde_loss(net1, net2, net3,
     r1_fgpm, r2_fgpm = residual_medium1(net1, xyt_fgpm, params_fgpm)
     r1_hydro, r2_hydro = residual_medium2(net2, xyt_hydro, params_hydro)
     r1_sub, r2_sub = residual_medium3(net3, xyt_sub, params_sub)
+   
 
     loss_pde = (
         mse(r1_fgpm, torch.zeros_like(r1_fgpm))
@@ -35,10 +37,10 @@ def compute_pde_loss(net1, net2, net3,
       + mse(r2_sub, torch.zeros_like(r2_sub))
     )
 
+
     return loss_pde
 
-
-
+    
 def compute_top_surface_loss_open(net1, xt_top, params_fgpm):
 
     tau_xz, Dx = top_surface_open_bc(net1, xt_top, params_fgpm)
@@ -93,6 +95,17 @@ def compute_interface_loss_hydro_sub(net2, net3, xyt_int):
 
     return loss_int
 
+def compute_far_field_loss(net3, xyt_far):
+
+    w, phi = substrate_far_field_bc(net3, xyt_far)
+
+    loss_far = (
+        mse(w, torch.zeros_like(w))
+      + mse(phi, torch.zeros_like(phi))
+    )
+
+    return loss_far
+
 
 
 def total_loss(
@@ -101,13 +114,15 @@ def total_loss(
     xt_top,
     xyt_int_fgpm_hydro,
     xyt_int_hydro_sub,
+    xyt_far_sub, 
     params_fgpm,
     params_hydro,
     params_sub,
     electrically_open=True,
     w_pde=1.0,
-    w_bc=1.0,
-    w_int=1.0
+    w_bc=5.0,
+    w_int=10.0,
+    w_far=20.0   
 ):
 
     loss_pde = compute_pde_loss(
@@ -123,16 +138,18 @@ def total_loss(
 
     loss_int1 = compute_interface_loss_fgpm_hydro(net1, net2, xyt_int_fgpm_hydro)
     loss_int2 = compute_interface_loss_hydro_sub(net2, net3, xyt_int_hydro_sub)
-
+    loss_far = compute_far_field_loss(net3, xyt_far_sub)
     loss_total = (
         w_pde * loss_pde
       + w_bc * loss_top
       + w_int * (loss_int1 + loss_int2)
+      + w_far * loss_far 
     )
 
     return loss_total, {
         "pde": loss_pde.item(),
         "bc_top": loss_top.item(),
         "interface_1": loss_int1.item(),
-        "interface_2": loss_int2.item()
+        "interface_2": loss_int2.item(),
+        "far": loss_far.item()
     }
