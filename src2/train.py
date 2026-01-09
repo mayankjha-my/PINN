@@ -98,9 +98,9 @@ def train(
             params_sub,
             electrically_open=electrically_open,
             w_pde=1.0,
-            w_bc=1.0,
-            w_int=1.0,
-            w_far=1.0  
+            w_bc=5.0,
+            w_int=10.0,
+            w_far=20.0  
         )
 
         # ================= BACKPROP =================
