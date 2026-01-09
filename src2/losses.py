@@ -120,9 +120,9 @@ def total_loss(
     params_sub,
     electrically_open=True,
     w_pde=1.0,
-    w_bc=5.0,
-    w_int=10.0,
-    w_far=20.0   
+    w_bc=1.0,
+    w_int=1.0,
+    w_far=1.0   
 ):
 
     loss_pde = compute_pde_loss(
