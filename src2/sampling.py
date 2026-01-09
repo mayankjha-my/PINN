@@ -20,11 +20,11 @@ def sample_domain_points(n_domain, geom):
     h2 = geom["h2"]
     h3 = geom.get("h3", h2 + h1)   # default substrate thickness
 
-    y_min = geom.get("y_min", -1.0)
-    y_max = geom.get("y_max", 1.0)
+    y_min = geom.get("y_min", -6.0)
+    y_max = geom.get("y_max", 6.0)
 
     t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 1.0)
+    t_max = geom.get("t_max", 6.0)
 
     n1 = n2 = n3 = n_domain
 
@@ -61,11 +61,11 @@ def sample_boundary_points(n_boundary, geom):
 
     h1 = geom["h1"]
 
-    y_min = geom.get("y_min", -1.0)
-    y_max = geom.get("y_max", 1.0)
+    y_min = geom.get("y_min", -6.0)
+    y_max = geom.get("y_max", 6.0)
 
     t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 1.0)
+    t_max = geom.get("t_max", 6.0)
 
     x = torch.full((n_boundary, 1), -h1)
     y = sample_uniform(n_boundary, y_min, y_max)
@@ -86,11 +86,11 @@ def sample_interface_points(n_interface, geom):
 
     h2 = geom["h2"]
 
-    y_min = geom.get("y_min", -1.0)
-    y_max = geom.get("y_max", 1.0)
+    y_min = geom.get("y_min", -6.0)
+    y_max = geom.get("y_max", 6.0)
 
     t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 1.0)
+    t_max = geom.get("t_max", 6.0)
 
     # ---------- FGPM / HYDRO ----------
     x1 = torch.zeros((n_interface, 1))
@@ -108,3 +108,22 @@ def sample_interface_points(n_interface, geom):
         xyt_int1.to(DEVICE),
         xyt_int2.to(DEVICE),
     )
+def sample_substrate_far_boundary(n_far, geom):
+    """
+    Far-field boundary for substrate (half-space)
+    x = h3
+    """
+
+    h3 = geom.get("h3", geom["h1"] + geom["h2"])
+
+    y_min = geom.get("y_min", -6.0)
+    y_max = geom.get("y_max", 6.0)
+
+    t_min = geom.get("t_min", 0.0)
+    t_max = geom.get("t_max", 6.0)
+
+    x = torch.full((n_far, 1), h3)
+    y = sample_uniform(n_far, y_min, y_max)
+    t = sample_uniform(n_far, t_min, t_max)
+
+    return torch.cat([x, y, t], dim=1).to(DEVICE)

@@ -32,11 +32,11 @@ CONFIG = {
    "GEOMETRY": {
     "h1": 5.0,      # FGPM thickness
     "h2": 5.0,      # Hydrogel thickness
-    "h3": 100.0,      # Substrate depth (optional)
+    "h3": 30.0,      # Substrate depth (optional)
     "y_min": -1.0,
-    "y_max": 1.0,
+    "y_max": 3.0,
     "t_min": 0.0,
-    "t_max": 3.0
+    "t_max": 6.0
 }
 
 }
