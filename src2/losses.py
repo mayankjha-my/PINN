@@ -67,33 +67,67 @@ def compute_top_surface_loss_short(net1, xt_top, params_fgpm):
 
 
 
-def compute_interface_loss_fgpm_hydro(net1, net2, xyt_int):
+# def compute_interface_loss_fgpm_hydro(net1, net2, xyt_int):
+
+#     dw, dphi, dgw, dgphi = interface_fgpm_hydro(net1, net2, xyt_int)
+
+#     loss_int = (
+#         mse(dw, torch.zeros_like(dw))
+#       + mse(dphi, torch.zeros_like(dphi))
+#       + mse(dgw, torch.zeros_like(dgw))
+#       + mse(dgphi, torch.zeros_like(dgphi))
+#     )
+
+#     return loss_int
+
+
+def compute_interface_loss_fgpm_hydro(net1, net2, xyt_int,
+                                     w_w=10.0, w_phi=1.0,
+                                     w_grad_w=10.0, w_grad_phi=1.0):
 
     dw, dphi, dgw, dgphi = interface_fgpm_hydro(net1, net2, xyt_int)
 
     loss_int = (
-        mse(dw, torch.zeros_like(dw))
-      + mse(dphi, torch.zeros_like(dphi))
-      + mse(dgw, torch.zeros_like(dgw))
-      + mse(dgphi, torch.zeros_like(dgphi))
+        w_w * mse(dw, torch.zeros_like(dw))
+      + w_phi * mse(dphi, torch.zeros_like(dphi))
+      + w_grad_w * mse(dgw, torch.zeros_like(dgw))
+      + w_grad_phi * mse(dgphi, torch.zeros_like(dgphi))
     )
 
     return loss_int
 
 
 
-def compute_interface_loss_hydro_sub(net2, net3, xyt_int):
+# def compute_interface_loss_hydro_sub(net2, net3, xyt_int):
+
+#     dw, dphi, dgw, dgphi = interface_hydro_substrate(net2, net3, xyt_int)
+
+#     loss_int = (
+#         mse(dw, torch.zeros_like(dw))
+#       + mse(dphi, torch.zeros_like(dphi))
+#       + mse(dgw, torch.zeros_like(dgw))
+#       + mse(dgphi, torch.zeros_like(dgphi))
+#     )
+
+#     return loss_int
+
+
+def compute_interface_loss_hydro_sub(net2, net3, xyt_int,
+                                    w_w=10.0, w_phi=1.0,
+                                    w_grad_w=10.0, w_grad_phi=1.0):
 
     dw, dphi, dgw, dgphi = interface_hydro_substrate(net2, net3, xyt_int)
 
     loss_int = (
-        mse(dw, torch.zeros_like(dw))
-      + mse(dphi, torch.zeros_like(dphi))
-      + mse(dgw, torch.zeros_like(dgw))
-      + mse(dgphi, torch.zeros_like(dgphi))
+        w_w * mse(dw, torch.zeros_like(dw))
+      + w_phi * mse(dphi, torch.zeros_like(dphi))
+      + w_grad_w * mse(dgw, torch.zeros_like(dgw))
+      + w_grad_phi * mse(dgphi, torch.zeros_like(dgphi))
     )
 
     return loss_int
+
+
 
 def compute_far_field_loss(net3, xyt_far):
 
@@ -120,8 +154,8 @@ def total_loss(
     params_sub,
     electrically_open=True,
     w_pde=1.0,
-    w_bc=5.0,
-    w_int=10.0,
+    w_bc=1.0,
+    w_int=50.0,
     w_far=20.0   
 ):
 
@@ -136,8 +170,27 @@ def total_loss(
     else:
         loss_top = compute_top_surface_loss_short(net1, xt_top, params_fgpm)
 
-    loss_int1 = compute_interface_loss_fgpm_hydro(net1, net2, xyt_int_fgpm_hydro)
-    loss_int2 = compute_interface_loss_hydro_sub(net2, net3, xyt_int_hydro_sub)
+    # loss_int1 = compute_interface_loss_fgpm_hydro(net1, net2, xyt_int_fgpm_hydro)
+    # loss_int2 = compute_interface_loss_hydro_sub(net2, net3, xyt_int_hydro_sub)
+
+    loss_int1 = compute_interface_loss_fgpm_hydro(
+    net1, net2, xyt_int_fgpm_hydro,
+    w_w=200.0,
+    w_phi=50.0,
+    w_grad_w=200.0,
+    w_grad_phi=50.0
+)
+
+    loss_int2 = compute_interface_loss_hydro_sub(
+        net2, net3, xyt_int_hydro_sub,
+        w_w=50.0,
+        w_phi=10.0,
+        w_grad_w=50.0,
+        w_grad_phi=10.0
+    )
+
+
+
     loss_far = compute_far_field_loss(net3, xyt_far_sub)
     loss_total = (
         w_pde * loss_pde
