@@ -1,42 +1,63 @@
 """
-Configuration file for constants & material properties.
-You will later replace placeholder values with actual data.
+Configuration file for material properties and geometry
+for SH-wave dispersion analysis using PINNs
 """
 
 CONFIG = {
-    "FGPM": {
-        "C44": 2.56*10**9,
-        "rho": 7500,
-        "sigma22": 4*10**7,
-        "e15": 12.7,
-        "eps11": 646*10**-11,
-        "alpha": 0.007,
-    },
-    "HYDROGEL": {
-        "C44": 384.61,
-        "rho": 7280,
-        "sigma22": 4,
-        "eps11": 8.8542*10**-12,
-        "F": 96485.3399,
-        "Zf": 1,
-        "Cf": 1.05,
-    },
-   "SUBSTRATE": {
-    "rho": 1570,                # kg/m^3
-    "sigma22": 4e7,             # Pa
-    "C44": 3.98*10**9,               # Pa (example – use your material)
-    "eta44": 4*10**7,             # Pa·s (example – use your material)
-    "alpha3":0.007,
-},
 
-   "GEOMETRY": {
-    "h1": 5.0,      # FGPM thickness
-    "h2": 5.0,      # Hydrogel thickness
-    "h3": 30.0,      # Substrate depth (optional)
-    "y_min": -1.0,
-    "y_max": 3.0,
-    "t_min": 0.0,
-    "t_max": 6.0
-}
+    # --------------------------------------------------
+    # Functionally Graded Layer (FGPM)
+    # --------------------------------------------------
+    "LAYER": {
+        "mu44_0": 4.35e9,          # Pa
+        "mu66_0": 5e9,          # Pa
+        "rho_0": 9890.0,           # kg/m^3
+        "P_0": 4.0e7,              # Initial stress (Pa)
+        "beta1": 0.007,            # FG parameter
 
+        # Electromagnetic parameters
+        "mu_e": 1,  # Magnetic permeability (H/m)
+        "H0": 1.0,                  # Magnetic field intensity
+        "phi": 0.78539816339        # Inclination angle (rad) = 45°
+    },
+
+    # --------------------------------------------------
+    # Functionally Graded Half-Space (Substrate)
+    # --------------------------------------------------
+    "HALFSPACE": {
+        "mu44_0": 5.3e9,           # Pa
+        "mu66_0": 6.47e9,           # Pa
+        "rho_0": 3400.0,            # kg/m^3
+        "P_0": 4.0e7,               # Initial stress (Pa)
+        "beta2": 0.007,             # FG parameter
+
+        # Gravity
+        "g": 9.81                   # m/s^2
+    },
+
+    # --------------------------------------------------
+    # Geometry & Dispersion Settings
+    # --------------------------------------------------
+    "GEOMETRY": {
+        "H": 1.0,                   # Non-dimensional layer thickness
+        "L": 100.0,                  # Truncated half-space depth (10H)
+
+        # Wavenumber sweep (non-dimensional)
+        "k_min": 0.1,
+        "k_max": 5.0,
+        "num_k": 40
+    },
+
+    # --------------------------------------------------
+    # Training Parameters
+    # --------------------------------------------------
+    "TRAINING": {
+        "epochs": 20000,
+        "learning_rate": 1e-3,
+        "loss_weights": {
+            "pde": 1.0,
+            "bc": 10.0,
+            "interface": 10.0
+        }
+    }
 }

@@ -1,12 +1,13 @@
 import torch
 import torch.optim as optim
+
 from networks import get_all_networks
 from config import CONFIG
 from sampling import (
     sample_domain_points,
-    sample_boundary_points,
-    sample_interface_points,
-    sample_substrate_far_boundary
+    sample_top_surface,
+    sample_interface,
+    sample_far_field
 )
 from losses import total_loss
 
@@ -14,121 +15,127 @@ from losses import total_loss
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def train(
+def train_for_single_k(
+    k,
     n_epochs=20000,
     n_domain=5000,
-    n_boundary=1000,
-    n_interface=1000,
-    lr=1e-3,
-    electrically_open=True
+    n_bc=1000,
+    n_int=1000,
+    n_far=1000,
+    lr=1e-3
 ):
+    """
+    Train PINN for a fixed wave number k
+    Returns learned phase velocity c
+    """
 
-    print(f"Training on device: {DEVICE}")
+    print(f"\nTraining for k = {k:.3f} on {DEVICE}")
 
-    # ---------------------------------------------
+    # --------------------------------------------------
     # Initialize networks
-    # ---------------------------------------------
-    net1, net2, net3 = get_all_networks()
-    net1.to(DEVICE)
-    net2.to(DEVICE)
-    net3.to(DEVICE)
+    # --------------------------------------------------
+    model_layer, model_half = get_all_networks()
+    model_layer.to(DEVICE)
+    model_half.to(DEVICE)
 
-    # ---------------------------------------------
-    # Load material properties
-    # ---------------------------------------------
-    params_fgpm = CONFIG["FGPM"]
-    params_hydro = CONFIG["HYDROGEL"]
-    params_sub = CONFIG["SUBSTRATE"]
-    geom = CONFIG["GEOMETRY"]
+    # --------------------------------------------------
+    # Trainable phase velocity
+    # --------------------------------------------------
+    c = torch.nn.Parameter(torch.tensor(0.8, device=DEVICE))
 
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # Parameters
+    # --------------------------------------------------
+    params_layer = CONFIG["LAYER"]
+    params_half  = CONFIG["HALFSPACE"]
+    geom         = CONFIG["GEOMETRY"]
+
+    # --------------------------------------------------
     # Optimizer
-    # ---------------------------------------------
+    # --------------------------------------------------
     optimizer = optim.Adam(
-        list(net1.parameters())
-        + list(net2.parameters())
-        + list(net3.parameters()),
+        list(model_layer.parameters()) +
+        list(model_half.parameters()) +
+        [c],
         lr=lr
     )
 
-    # ---------------------------------------------
-    # Training Loop
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # Training loop
+    # --------------------------------------------------
     for epoch in range(1, n_epochs + 1):
 
-        # ================= SAMPLE POINTS =================
-        xyt_fgpm, xyt_hydro, xyt_sub = sample_domain_points(
-            n_domain, geom
-        )
+        # --------- Sample points ---------
+        z_layer, z_half = sample_domain_points(n_domain, geom)
+        z_top  = sample_top_surface(n_bc, geom)
+        z_int  = sample_interface(n_int)
+        z_far  = sample_far_field(n_far, geom)
 
-        xt_top = sample_boundary_points(
-            n_boundary, geom
-        )
-
-        xyt_int_fgpm_hydro, xyt_int_hydro_sub = sample_interface_points(
-            n_interface, geom
-        )
-
-        xyt_far_sub = sample_substrate_far_boundary(
-            n_boundary, geom
-        )
-
-        # move to GPU if available
-        xyt_fgpm = xyt_fgpm.to(DEVICE)
-        xyt_hydro = xyt_hydro.to(DEVICE)
-        xyt_sub = xyt_sub.to(DEVICE)
-
-        xt_top = xt_top.to(DEVICE)
-
-        xyt_int_fgpm_hydro = xyt_int_fgpm_hydro.to(DEVICE)
-        xyt_int_hydro_sub = xyt_int_hydro_sub.to(DEVICE)
-
-        # ================= ZERO GRAD =================
         optimizer.zero_grad()
 
-        # ================= COMPUTE LOSS =================
+        # --------- Loss ---------
         loss, logs = total_loss(
-            net1, net2, net3,
-            xyt_fgpm, xyt_hydro, xyt_sub,
-            xt_top,
-            xyt_int_fgpm_hydro,
-            xyt_int_hydro_sub,
-            params_fgpm,
-            params_hydro,
-            params_sub,
-            electrically_open=electrically_open,
+            model_layer,
+            model_half,
+            z_layer,
+            z_half,
+            z_top,
+            z_int,
+            z_far,
+            params_layer,
+            params_half,
+            k,
+            c,
             w_pde=1.0,
             w_bc=5.0,
             w_int=10.0,
-            w_far=20.0  
+            w_far=20.0
         )
 
-        # ================= BACKPROP =================
         loss.backward()
         optimizer.step()
 
-        # ================= LOGGING =================
-        if epoch % 100 == 0:
+        # --------- Logging ---------
+        if epoch % 500 == 0:
             print(
-                f"Epoch {epoch} | "
-                f"Total Loss = {loss.item():.6e} | "
+                f"Epoch {epoch:6d} | "
+                f"Loss = {loss.item():.3e} | "
+                f"c = {c.item():.5f} | "
                 f"PDE = {logs['pde']:.2e} | "
-                f"Top BC = {logs['bc_top']:.2e} | "
-                f"Int1 = {logs['interface_1']:.2e} | "
-                f"Int2 = {logs['interface_2']:.2e}"
-                f"Far = {logs['far']:.2e}"
-
+                f"BC = {logs['bc_top']:.2e} | "
+                f"INT = {logs['interface']:.2e} | "
+                f"FAR = {logs['far']:.2e}"
             )
 
-        # ================= SAVE CHECKPOINT =================
-        if epoch % 5000 == 0:
-            torch.save({
-                "net1": net1.state_dict(),
-                "net2": net2.state_dict(),
-                "net3": net3.state_dict(),
-                "epoch": epoch
-            }, f"pinn_checkpoint_epoch{epoch}.pth")
+    return c.detach().cpu().item()
+
+
+# --------------------------------------------------
+# Dispersion curve extraction
+# --------------------------------------------------
+def train_dispersion():
+    """
+    Sweep over k and compute dispersion curve c(k)
+    """
+
+    k_vals = torch.linspace(
+        CONFIG["GEOMETRY"]["k_min"],
+        CONFIG["GEOMETRY"]["k_max"],
+        CONFIG["GEOMETRY"]["num_k"]
+    )
+
+    dispersion = []
+
+    for k in k_vals:
+        c_val = train_for_single_k(k.item())
+        dispersion.append([k.item(), c_val])
+
+    return dispersion
 
 
 if __name__ == "__main__":
-    train()
+    dispersion_data = train_dispersion()
+
+    # Save results
+    torch.save(dispersion_data, "dispersion_curve.pt")
+    print("\nDispersion data saved to dispersion_curve.pt")

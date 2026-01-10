@@ -1,129 +1,78 @@
 import torch
 
-
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+# --------------------------------------------------
+# Utility: uniform sampling
+# --------------------------------------------------
 def sample_uniform(n, low, high):
     return low + (high - low) * torch.rand(n, 1)
 
 
+# --------------------------------------------------
+# Domain sampling
+# --------------------------------------------------
 def sample_domain_points(n_domain, geom):
     """
     Returns:
-        xyt_fgpm
-        xyt_hydro
-        xyt_sub
+        z_layer   : points in layer domain [-H, 0]
+        z_half    : points in half-space [0, L]
     """
 
-    h1 = geom["h1"]
-    h2 = geom["h2"]
-    h3 = geom.get("h3", h2 + h1)   # default substrate thickness
+    H = geom.get("H", 1.0)
+    L = geom.get("L", 10.0)
 
-    y_min = geom.get("y_min", -6.0)
-    y_max = geom.get("y_max", 6.0)
+    # Layer: z ∈ [-H, 0]
+    z_layer = sample_uniform(n_domain, -H, 0.0)
 
-    t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 6.0)
-
-    n1 = n2 = n3 = n_domain
-
-    # ---------------- FGPM ----------------
-    x1 = sample_uniform(n1, -h1, 0.0)
-    y1 = sample_uniform(n1, y_min, y_max)
-    t1 = sample_uniform(n1, t_min, t_max)
-    xyt_fgpm = torch.cat([x1, y1, t1], dim=1)
-
-    # ---------------- HYDROGEL ----------------
-    x2 = sample_uniform(n2, 0.0, h2)
-    y2 = sample_uniform(n2, y_min, y_max)
-    t2 = sample_uniform(n2, t_min, t_max)
-    xyt_hydro = torch.cat([x2, y2, t2], dim=1)
-
-    # ---------------- SUBSTRATE ----------------
-    x3 = sample_uniform(n3, h2, h3)
-    y3 = sample_uniform(n3, y_min, y_max)
-    t3 = sample_uniform(n3, t_min, t_max)
-    xyt_sub = torch.cat([x3, y3, t3], dim=1)
+    # Half-space: z ∈ [0, L]
+    z_half = sample_uniform(n_domain, 0.0, L)
 
     return (
-        xyt_fgpm.to(DEVICE),
-        xyt_hydro.to(DEVICE),
-        xyt_sub.to(DEVICE),
+        z_layer.to(DEVICE),
+        z_half.to(DEVICE),
     )
 
 
-
-def sample_boundary_points(n_boundary, geom):
+# --------------------------------------------------
+# Top surface boundary (z = -H)
+# --------------------------------------------------
+def sample_top_surface(n_boundary, geom):
     """
-    Top free surface at x = -h1
-    """
-
-    h1 = geom["h1"]
-
-    y_min = geom.get("y_min", -6.0)
-    y_max = geom.get("y_max", 6.0)
-
-    t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 6.0)
-
-    x = torch.full((n_boundary, 1), -h1)
-    y = sample_uniform(n_boundary, y_min, y_max)
-    t = sample_uniform(n_boundary, t_min, t_max)
-
-    xt_top = torch.cat([x, y, t], dim=1)
-
-    return xt_top.to(DEVICE)
-
-
-
-def sample_interface_points(n_interface, geom):
-    """
-    Returns:
-        FGPM-HYDRO interface points at x = 0
-        HYDRO-SUB interface points at x = h2
+    Top free surface at z = -H
     """
 
-    h2 = geom["h2"]
+    H = geom.get("H", 1.0)
 
-    y_min = geom.get("y_min", -6.0)
-    y_max = geom.get("y_max", 6.0)
+    z_top = torch.full((n_boundary, 1), -H)
 
-    t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 6.0)
+    return z_top.to(DEVICE)
 
-    # ---------- FGPM / HYDRO ----------
-    x1 = torch.zeros((n_interface, 1))
-    y1 = sample_uniform(n_interface, y_min, y_max)
-    t1 = sample_uniform(n_interface, t_min, t_max)
-    xyt_int1 = torch.cat([x1, y1, t1], dim=1)
 
-    # ---------- HYDRO / SUB ----------
-    x2 = torch.full((n_interface, 1), h2)
-    y2 = sample_uniform(n_interface, y_min, y_max)
-    t2 = sample_uniform(n_interface, t_min, t_max)
-    xyt_int2 = torch.cat([x2, y2, t2], dim=1)
-
-    return (
-        xyt_int1.to(DEVICE),
-        xyt_int2.to(DEVICE),
-    )
-def sample_substrate_far_boundary(n_far, geom):
+# --------------------------------------------------
+# Interface boundary (z = 0)
+# --------------------------------------------------
+def sample_interface(n_interface):
     """
-    Far-field boundary for substrate (half-space)
-    x = h3
+    Interface between layer and half-space at z = 0
     """
 
-    h3 = geom.get("h3", geom["h1"] + geom["h2"])
+    z_int = torch.zeros((n_interface, 1))
 
-    y_min = geom.get("y_min", -6.0)
-    y_max = geom.get("y_max", 6.0)
+    return z_int.to(DEVICE)
 
-    t_min = geom.get("t_min", 0.0)
-    t_max = geom.get("t_max", 6.0)
 
-    x = torch.full((n_far, 1), h3)
-    y = sample_uniform(n_far, y_min, y_max)
-    t = sample_uniform(n_far, t_min, t_max)
+# --------------------------------------------------
+# Far-field boundary (z = L)
+# --------------------------------------------------
+def sample_far_field(n_far, geom):
+    """
+    Far-field boundary for half-space at z = L
+    """
 
-    return torch.cat([x, y, t], dim=1).to(DEVICE)
+    L = geom.get("L", 10.0)
+
+    z_far = torch.full((n_far, 1), L)
+
+    return z_far.to(DEVICE)

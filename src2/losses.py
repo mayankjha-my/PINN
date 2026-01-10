@@ -2,154 +2,175 @@ import torch
 import torch.nn as nn
 
 from .pde_residuals import (
-    residual_medium1,
-    residual_medium2,
-    residual_medium3
+    residual_layer_coupled,
+    residual_halfspace
 )
 
 from .boundary_conditions import (
-    top_surface_open_bc,
-    top_surface_short_bc,
-    interface_fgpm_hydro,
-    interface_hydro_substrate,
-    substrate_far_field_bc
+    top_surface_bc,
+    interface_layer_halfspace,
+    halfspace_far_field_bc
 )
-
 
 mse = nn.MSELoss()
 
+# --------------------------------------------------
+# PDE loss
+# --------------------------------------------------
+def compute_pde_loss(
+    model_layer,
+    model_half,
+    z_layer,
+    z_half,
+    params_layer,
+    params_half,
+    k,
+    c
+):
+    """
+    PDE residual loss for layer and half-space
+    """
 
-def compute_pde_loss(net1, net2, net3,
-                     xyt_fgpm, xyt_hydro, xyt_sub,
-                     params_fgpm, params_hydro, params_sub):
-
-    r1_fgpm, r2_fgpm = residual_medium1(net1, xyt_fgpm, params_fgpm)
-    r1_hydro, r2_hydro = residual_medium2(net2, xyt_hydro, params_hydro)
-    r1_sub, r2_sub = residual_medium3(net3, xyt_sub, params_sub)
-   
-
-    loss_pde = (
-        mse(r1_fgpm, torch.zeros_like(r1_fgpm))
-      + mse(r2_fgpm, torch.zeros_like(r2_fgpm))
-      + mse(r1_hydro, torch.zeros_like(r1_hydro))
-      + mse(r2_hydro, torch.zeros_like(r2_hydro))
-      + mse(r1_sub, torch.zeros_like(r1_sub))
-      + mse(r2_sub, torch.zeros_like(r2_sub))
+    rL_R, rL_I = residual_layer_coupled(
+        model_layer, z_layer, params_layer, k, c
     )
 
+    rH = residual_halfspace(
+        model_half, z_half, params_half, k, c
+    )
+
+    loss_pde = (
+        mse(rL_R, torch.zeros_like(rL_R)) +
+        mse(rL_I, torch.zeros_like(rL_I)) +
+        mse(rH,   torch.zeros_like(rH))
+    )
 
     return loss_pde
 
-    
-def compute_top_surface_loss_open(net1, xt_top, params_fgpm):
 
-    tau_xz, Dx = top_surface_open_bc(net1, xt_top, params_fgpm)
+# --------------------------------------------------
+# Top surface boundary loss
+# --------------------------------------------------
+def compute_top_surface_loss(model_layer, z_top, params_layer):
+    """
+    Stress-free top surface
+    """
+
+    tau_R, tau_I = top_surface_bc(model_layer, z_top, params_layer)
 
     loss_bc = (
-        mse(tau_xz, torch.zeros_like(tau_xz))
-      + mse(Dx, torch.zeros_like(Dx))
+        mse(tau_R, torch.zeros_like(tau_R)) +
+        mse(tau_I, torch.zeros_like(tau_I))
     )
 
     return loss_bc
 
 
+# --------------------------------------------------
+# Interface loss (layer ↔ half-space)
+# --------------------------------------------------
+def compute_interface_loss(
+    model_layer,
+    model_half,
+    z_int,
+    params_layer,
+    params_half
+):
+    """
+    Continuity conditions at z = 0
+    """
 
-def compute_top_surface_loss_short(net1, xt_top, params_fgpm):
-
-    tau_xz, phi = top_surface_short_bc(net1, xt_top, params_fgpm)
-
-    loss_bc = (
-        mse(tau_xz, torch.zeros_like(tau_xz))
-      + mse(phi, torch.zeros_like(phi))
+    r1, r2, r3, r4 = interface_layer_halfspace(
+        model_layer, model_half, z_int,
+        params_layer, params_half
     )
 
-    return loss_bc
-
-
-
-def compute_interface_loss_fgpm_hydro(net1, net2, xyt_int):
-
-    dw, dphi, dgw, dgphi = interface_fgpm_hydro(net1, net2, xyt_int)
-
     loss_int = (
-        mse(dw, torch.zeros_like(dw))
-      + mse(dphi, torch.zeros_like(dphi))
-      + mse(dgw, torch.zeros_like(dgw))
-      + mse(dgphi, torch.zeros_like(dgphi))
+        mse(r1, torch.zeros_like(r1)) +
+        mse(r2, torch.zeros_like(r2)) +
+        mse(r3, torch.zeros_like(r3)) +
+        mse(r4, torch.zeros_like(r4))
     )
 
     return loss_int
 
 
+# --------------------------------------------------
+# Far-field loss
+# --------------------------------------------------
+def compute_far_field_loss(model_half, z_far):
+    """
+    Half-space decay condition
+    """
 
-def compute_interface_loss_hydro_sub(net2, net3, xyt_int):
+    V = halfspace_far_field_bc(model_half, z_far)
 
-    dw, dphi, dgw, dgphi = interface_hydro_substrate(net2, net3, xyt_int)
-
-    loss_int = (
-        mse(dw, torch.zeros_like(dw))
-      + mse(dphi, torch.zeros_like(dphi))
-      + mse(dgw, torch.zeros_like(dgw))
-      + mse(dgphi, torch.zeros_like(dgphi))
-    )
-
-    return loss_int
-
-def compute_far_field_loss(net3, xyt_far):
-
-    w, phi = substrate_far_field_bc(net3, xyt_far)
-
-    loss_far = (
-        mse(w, torch.zeros_like(w))
-      + mse(phi, torch.zeros_like(phi))
-    )
+    loss_far = mse(V, torch.zeros_like(V))
 
     return loss_far
 
 
-
+# --------------------------------------------------
+# Total loss
+# --------------------------------------------------
 def total_loss(
-    net1, net2, net3,
-    xyt_fgpm, xyt_hydro, xyt_sub,
-    xt_top,
-    xyt_int_fgpm_hydro,
-    xyt_int_hydro_sub,
-    xyt_far_sub, 
-    params_fgpm,
-    params_hydro,
-    params_sub,
-    electrically_open=True,
-    w_pde=1.0,
-    w_bc=1.0,
-    w_int=1.0,
-    w_far=1.0   
+    model_layer,
+    model_half,
+    z_layer,
+    z_half,
+    z_top,
+    z_int,
+    z_far,
+    params_layer,
+    params_half,
+    k,
+    c,
+    w_pde=5.0,
+    w_bc=5.0,
+    w_int=5.0,
+    w_far=5.0
 ):
+    """
+    Total PINN loss for dispersion analysis
+    """
 
     loss_pde = compute_pde_loss(
-        net1, net2, net3,
-        xyt_fgpm, xyt_hydro, xyt_sub,
-        params_fgpm, params_hydro, params_sub
+        model_layer,
+        model_half,
+        z_layer,
+        z_half,
+        params_layer,
+        params_half,
+        k,
+        c
     )
 
-    if electrically_open:
-        loss_top = compute_top_surface_loss_open(net1, xt_top, params_fgpm)
-    else:
-        loss_top = compute_top_surface_loss_short(net1, xt_top, params_fgpm)
+    loss_bc = compute_top_surface_loss(
+        model_layer, z_top, params_layer
+    )
 
-    loss_int1 = compute_interface_loss_fgpm_hydro(net1, net2, xyt_int_fgpm_hydro)
-    loss_int2 = compute_interface_loss_hydro_sub(net2, net3, xyt_int_hydro_sub)
-    loss_far = compute_far_field_loss(net3, xyt_far_sub)
+    loss_int = compute_interface_loss(
+        model_layer,
+        model_half,
+        z_int,
+        params_layer,
+        params_half
+    )
+
+    loss_far = compute_far_field_loss(
+        model_half, z_far
+    )
+
     loss_total = (
-        w_pde * loss_pde
-      + w_bc * loss_top
-      + w_int * (loss_int1 + loss_int2)
-      + w_far * loss_far 
+        w_pde * loss_pde +
+        w_bc  * loss_bc +
+        w_int * loss_int +
+        w_far * loss_far
     )
 
     return loss_total, {
         "pde": loss_pde.item(),
-        "bc_top": loss_top.item(),
-        "interface_1": loss_int1.item(),
-        "interface_2": loss_int2.item(),
+        "bc_top": loss_bc.item(),
+        "interface": loss_int.item(),
         "far": loss_far.item()
     }

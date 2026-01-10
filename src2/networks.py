@@ -2,12 +2,15 @@ import torch
 import torch.nn as nn
 
 
+# --------------------------------------------------
+# Generic PINN network
+# --------------------------------------------------
 class PINN(nn.Module):
     """
-    Neural network model returning [w, phi]
+    Fully-connected neural network
     """
 
-    def __init__(self, in_dim=3, out_dim=2, width=128, depth=8):
+    def __init__(self, in_dim, out_dim, width=128, depth=8):
         super().__init__()
 
         layers = []
@@ -21,17 +24,34 @@ class PINN(nn.Module):
         layers.append(nn.Linear(width, out_dim))
         self.model = nn.Sequential(*layers)
 
-    def forward(self, xyt):
-        return self.model(xyt)
+    def forward(self, x):
+        return self.model(x)
 
 
+# --------------------------------------------------
+# Network factory for dispersion problem
+# --------------------------------------------------
 def get_all_networks():
     """
-    Returns PINN models for all three media
+    Returns PINN models for:
+    - Functionally graded layer (complex field: V_R, V_I)
+    - Functionally graded half-space (real field: V)
     """
 
-    net1 = PINN()
-    net2 = PINN()
-    net3 = PINN()
+    # Layer: input z → outputs [V_R, V_I]
+    net_layer = PINN(
+        in_dim=1,
+        out_dim=2,
+        width=128,
+        depth=8
+    )
 
-    return net1, net2, net3
+    # Half-space: input z → output [V]
+    net_halfspace = PINN(
+        in_dim=1,
+        out_dim=1,
+        width=128,
+        depth=8
+    )
+
+    return net_layer, net_halfspace

@@ -2,163 +2,87 @@ import torch
 from .utils import gradients
 
 
-def top_surface_open_bc(model1, xt_top, material_params):
+# --------------------------------------------------
+# Top surface boundary condition (z = -1)
+# tau_23 = 0
+# --------------------------------------------------
+def top_surface_bc(model_layer, z_top, material_params):
     """
-    Electrically OPEN top surface:
-    tau_xz = 0
-    Dx = 0
-    """
-
-    xt_top.requires_grad_(True)
-    # extract x-coordinate at boundary
-    x = xt_top[:, 0:1]
-
-
-    pred = model1(xt_top)
-    w = pred[:, 0:1]
-    phi = pred[:, 1:2]
-
-    grads_w = gradients(w, xt_top)
-    w_x = grads_w[:, 0:1]
-
-    grads_phi = gradients(phi, xt_top)
-    phi_x = grads_phi[:, 0:1]
-
-    # FGPM material parameters
-    alpha = material_params["alpha"]
-
-    C44   = material_params["C44"]   * torch.exp(alpha * x)
-    e15   = material_params["e15"]   * torch.exp(alpha * x)
-    eps11 = material_params["eps11"] * torch.exp(alpha * x)
-
-    C0 = material_params["C44"]
-    E0 = material_params["e15"]  
-    # shear stress tau_xz
-    tau_xz = (C44 * w_x + e15 * phi_x) / C0
-
-    # electric displacement
-    Dx     = (e15 * w_x - eps11 * phi_x) / E0
-
-
-    return tau_xz, Dx
-
-
-
-def top_surface_short_bc(model1, xt_top, material_params):
-    """
-    Electrically SHORT top surface:
-    tau_xz = 0
-    phi = 0
+    Stress-free top surface:
+    tau_23 = mu44 * dV/dz = 0
+    Applied to both real and imaginary parts
     """
 
-    xt_top.requires_grad_(True)
+    z_top.requires_grad_(True)
 
-    pred = model1(xt_top)
-    w = pred[:, 0:1]
-    phi = pred[:, 1:2]
+    pred = model_layer(z_top)
+    V_R = pred[:, 0:1]
+    V_I = pred[:, 1:2]
 
-    grads_w = gradients(w, xt_top)
-    w_x = grads_w[:, 0:1]
+    V_R_z = gradients(V_R, z_top)
+    V_I_z = gradients(V_I, z_top)
 
-    grads_phi = gradients(phi, xt_top)
-    phi_x = grads_phi[:, 0:1]
+    beta1 = material_params["beta1"]
+    mu44  = material_params["mu44_0"] * (1.0 + torch.sin(beta1 * z_top))
 
+    tau_R = mu44 * V_R_z
+    tau_I = mu44 * V_I_z
 
-      # extract x-coordinate at boundary
-    x = xt_top[:, 0:1]
-
-    # FGPM material parameters
-    alpha = material_params["alpha"]
-
-    C44   = material_params["C44"]   * torch.exp(alpha * x)
-    e15   = material_params["e15"]   * torch.exp(alpha * x)
-    C0 = material_params["C44"]
+    return tau_R, tau_I
 
 
-    tau_xz = (C44 * w_x + e15 * phi_x)/C0
-
-    return tau_xz, phi
-
-
-
-def interface_fgpm_hydro(model1, model2, xyt_int):
+# --------------------------------------------------
+# Interface between layer and half-space (z = 0)
+# --------------------------------------------------
+def interface_layer_halfspace(model_layer, model_half, z_int,
+                              params_layer, params_half):
     """
-    Interface at x = 0
-    C¹ continuity in the NORMAL direction only
+    Interface conditions:
+    V_R^l = V^h
+    V_I^l = 0
+    mu44^l * dV_R^l/dz = mu44^h * dV^h/dz
+    mu44^l * dV_I^l/dz = 0
     """
 
-    xyt_int.requires_grad_(True)
+    z_int.requires_grad_(True)
 
-    pred1 = model1(xyt_int)
-    pred2 = model2(xyt_int)
+    # layer fields
+    pred_l = model_layer(z_int)
+    V_R = pred_l[:, 0:1]
+    V_I = pred_l[:, 1:2]
 
-    w1, phi1 = pred1[:, 0:1], pred1[:, 1:2]
-    w2, phi2 = pred2[:, 0:1], pred2[:, 1:2]
+    # half-space field
+    V_h = model_half(z_int)
 
-    grads_w1 = gradients(w1, xyt_int)
-    grads_w2 = gradients(w2, xyt_int)
+    # derivatives
+    V_R_z = gradients(V_R, z_int)
+    V_I_z = gradients(V_I, z_int)
+    V_h_z = gradients(V_h, z_int)
 
-    grads_phi1 = gradients(phi1, xyt_int)
-    grads_phi2 = gradients(phi2, xyt_int)
+    # graded shear moduli
+    beta1 = params_layer["beta1"]
+    beta2 = params_half["beta2"]
 
-    # ONLY x-derivative continuity
-    dw_dx   = grads_w1[:, 0:1] - grads_w2[:, 0:1]
-    dw_dy   = grads_w1[:, 1:2] - grads_w2[:, 1:2]
-    dphi_dx = grads_phi1[:, 0:1] - grads_phi2[:, 0:1]
-    dphi_dy = grads_phi1[:, 1:2] - grads_phi2[:, 1:2]
-
+    mu44_l = params_layer["mu44_0"] * (1.0 + torch.sin(beta1 * z_int))
+    mu44_h = params_half["mu44_0"] * (1.0 - torch.sin(beta2 * z_int))
 
     return (
-        w1 - w2,        # displacement continuity
-        phi1 - phi2,    # potential continuity
-        dw_dx + dw_dy,          # normal strain continuity
-        dphi_dx + dphi_dy         # normal electric field continuity
+        V_R - V_h,                      # displacement continuity
+        V_I,                            # imaginary part vanishes
+        mu44_l * V_R_z - mu44_h * V_h_z,  # stress continuity (real)
+        mu44_l * V_I_z                  # imaginary stress = 0
     )
 
 
-
-def interface_hydro_substrate(model2, model3, xyt_int):
-    """
-    Interface at x = h2
-    C¹ continuity in the normal (x) direction only
-    """
-
-    xyt_int.requires_grad_(True)
-
-    pred2 = model2(xyt_int)
-    pred3 = model3(xyt_int)
-
-    w2, phi2 = pred2[:, 0:1], pred2[:, 1:2]
-    w3, phi3 = pred3[:, 0:1], pred3[:, 1:2]
-
-    grads_w2 = gradients(w2, xyt_int)
-    grads_w3 = gradients(w3, xyt_int)
-
-    grads_phi2 = gradients(phi2, xyt_int)
-    grads_phi3 = gradients(phi3, xyt_int)
-
-    # ONLY x-derivative continuity
-    dw_dx   = grads_w2[:, 0:1] - grads_w3[:, 0:1]
-    dw_dy   = grads_w2[:, 1:2] - grads_w3[:, 1:2]
-    dphi_dx = grads_phi2[:, 0:1] - grads_phi3[:, 0:1]
-    dphi_dy = grads_phi2[:, 1:2] - grads_phi3[:, 1:2]
-
-
-    return (
-        w2 - w3,        # displacement continuity
-        phi2 - phi3,    # potential continuity
-        dw_dx + dw_dy,          # normal strain continuity
-        dphi_dx + dphi_dy        # normal electric field continuity
-    )
-def substrate_far_field_bc(model3, xyt_far):
+# --------------------------------------------------
+# Far-field boundary condition (z = 10)
+# --------------------------------------------------
+def halfspace_far_field_bc(model_half, z_far):
     """
     Half-space decay condition:
-    w → 0, phi → 0 as x → +∞
+    V -> 0 as z -> infinity (z = 10)
     """
 
-    pred = model3(xyt_far)
-    w   = pred[:, 0:1]
-    phi = pred[:, 1:2]
+    V = model_half(z_far)
 
-    return w, phi
-
+    return V

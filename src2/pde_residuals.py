@@ -1,176 +1,125 @@
 import torch
-from .utils import gradients
 
-
-def residual_medium1(model, xyt, params):
+# --------------------------------------------------
+# Gradient utility (included directly)
+# --------------------------------------------------
+def gradients(u, x):
     """
-    FGPM governing equations
+    Computes du/dx using torch.autograd
+    u : (N,1)
+    x : (N,1)
     """
-
-    xyt.requires_grad_(True)
-
-    pred = model(xyt)
-    w = pred[:, 0:1]
-    phi = pred[:, 1:2]
-
-    # first derivatives
-    grads_w = gradients(w, xyt)
-    grads_phi = gradients(phi, xyt)
-
-    w_x = grads_w[:, 0:1]
-    w_y = grads_w[:, 1:2] 
-    w_t = grads_w[:, 2:3]
-
-    phi_x = grads_phi[:, 0:1]
-    phi_y = grads_phi[:, 1:2]
-
-    # second derivatives
-    w_xx = gradients(w_x, xyt)[:, 0:1]
-    w_yy = gradients(w_y, xyt)[:, 1:2]
-    w_tt = gradients(w_t, xyt)[:, 2:3]
-
-    phi_xx = gradients(phi_x, xyt)[:, 0:1]
-    phi_yy = gradients(phi_y, xyt)[:, 1:2]
-
-    # material constants
-    C44 = params["C44"]
-    rho = params["rho"]
-    sig22 = params["sigma22"]
-    e15 = params["e15"]
-    eps11 = params["eps11"]
-    alpha = params["alpha"]
-
-    C0 = params["C44"]
-    E0 = params["e15"]
+    return torch.autograd.grad(
+        outputs=u,
+        inputs=x,
+        grad_outputs=torch.ones_like(u),
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True
+    )[0]
 
 
-    # ------------------ Residual 1 ------------------
-    r1 = (
-        C44 * w_xx
-        + (C44 + sig22) * w_yy
-        + alpha * C44 * w_x
-        + e15 * (phi_xx + phi_yy + alpha * phi_x)
-        - rho * w_tt
-    ) / C0
-
-    # ------------------ Residual 2 ------------------
-    r2 = (
-        e15 * (w_xx + w_yy + alpha * w_x)
-        - eps11 * (phi_xx + phi_yy + alpha * phi_x)
-    )/ E0
-
-    return r1, r2
-
-
-def residual_medium2(model, xyt, params):
+# --------------------------------------------------
+# Residual for FUNCTIONALLY GRADED LAYER
+# --------------------------------------------------
+def residual_layer_coupled(model, z, params, k, c):
     """
-    Hydrogel governing equations
+    Layer residual with FULL electromagnetic coupling
+    (correct signs, directly from governing PDE)
     """
 
-    xyt.requires_grad_(True)
+    z.requires_grad_(True)
 
-    pred = model(xyt)
-    w = pred[:, 0:1]
-    phi = pred[:, 1:2]
-
-    # first & second derivatives
-    grads_w = gradients(w, xyt)
-    w_x = grads_w[:, 0:1]
-    w_y = grads_w[:, 1:2]
-    w_t = grads_w[:, 2:3]
-
-    w_xx = gradients(w_x, xyt)[:, 0:1]
-    w_yy = gradients(w_y, xyt)[:, 1:2]
-    w_tt = gradients(w_t, xyt)[:, 2:3]
-
-    grads_phi = gradients(phi, xyt)
-    phi_x = grads_phi[:, 0:1]
-    phi_y = grads_phi[:, 1:2]
-
-    phi_xx = gradients(phi_x, xyt)[:, 0:1]
-    phi_yy = gradients(phi_y, xyt)[:, 1:2]
-
-    # material parameters
-    C44 = params["C44"]
-    rho = params["rho"]
-    sig22 = params["sigma22"]
-    eps11 = params["eps11"]
-
-    F = params["F"]
-    Zf = params["Zf"]
-    Cf = params["Cf"]
-
-    # ------------------ Residual 1 ------------------
-    r1 = (
-        w_xx
-        + ((C44 + sig22) / C44) * w_yy
-        - (rho / C44) * w_tt
-    )
-
-    # ------------------ Residual 2 ------------------
-    rhs = -(F * Zf * Cf) / eps11
-
-    r2 = (phi_xx + phi_yy - rhs) / max(abs(rhs), 1.0)
-
-    return r1, r2
-
-
-def residual_medium3(model, xyt, params):
-
-    xyt.requires_grad_(True)
-    pred = model(xyt)
-
-    w   = pred[:, 0:1]
-    phi = pred[:, 1:2]
-
-    x = xyt[:, 0:1]
-
-    # material properties
-    alpha3 = params["alpha3"]
-    C44   = params["C44"]   * (1 - torch.sin(params["alpha3"] * x))
-    eta44 = params["eta44"] * (1 - torch.sin(params["alpha3"] * x))
-    rho   = params["rho"]   * (1 - torch.sin(params["alpha3"] * x))
-    sig22 = params["sigma22"] * (1 - torch.sin(params["alpha3"] * x))
-    C0 = params["C44"]
-    E0 = params["eta44"]
-
+    pred = model(z)
+    V_R = pred[:, 0:1]   # real part
+    V_I = pred[:, 1:2]   # imaginary part
 
     # derivatives
-    w_x = gradients(w, xyt)[:, 0:1]
-    w_y = gradients(w, xyt)[:, 1:2]
-    w_t = gradients(w, xyt)[:, 2:3]
+    V_R_z  = gradients(V_R, z)
+    V_R_zz = gradients(V_R_z, z)
 
-    w_xx = gradients(w_x, xyt)[:, 0:1]
-    w_yy = gradients(w_y, xyt)[:, 1:2]
-    w_tt = gradients(w_t, xyt)[:, 2:3]
+    V_I_z  = gradients(V_I, z)
+    V_I_zz = gradients(V_I_z, z)
 
-    w_xt = gradients(w_x, xyt)[:, 2:3]
-    w_yt = gradients(w_y, xyt)[:, 2:3]
+    # functional grading
+    beta1 = params["beta1"]
 
-   
-    # correct viscoelastic derivatives
-    w_xxt = gradients(w_xx, xyt)[:, 2:3]   # ∂³w/(∂x²∂t)
-    w_yyt = gradients(w_yy, xyt)[:, 2:3]   # ∂³w/(∂y²∂t)
+    mu44 = params["mu44_0"] * (1.0 + torch.sin(beta1 * z))
+    mu66 = params["mu66_0"] * (1.0 + torch.sin(beta1 * z))
+    rho  = params["rho_0"]  * (1.0 + torch.sin(beta1 * z))
+    P    = params["P_0"]    * (1.0 + torch.sin(beta1 * z))
+
+    # EM parameters
+    mu_e = params["mu_e"]
+    H0   = params["H0"]
+    phi = torch.tensor(params["phi"], device=z.device)
+
+    # coefficients (✔ corrected)
+    A = mu66 - P / 2.0 + mu_e * H0**2 * torch.cos(phi)**2
+    B = mu_e * H0**2 * torch.sin(phi)**2
+    C = k * mu_e * H0**2 * torch.sin(2.0 * phi)
+
+    # ---------------- REAL residual ----------------
+    r_real = (
+        gradients(mu44 * V_R_z, z)
+        - k**2 * A * V_R
+        + B * V_R_zz
+        - C * V_I_z
+        + rho * k**2 * c**2 * V_R
+    )
+
+    # ---------------- IMAG residual ----------------
+    r_imag = (
+        gradients(mu44 * V_I_z, z)
+        - k**2 * A * V_I
+        + B * V_I_zz
+        + C * V_R_z
+        + rho * k**2 * c**2 * V_I
+    )
+
+    return r_real, r_imag
 
 
-    C44_x = gradients(C44, xyt)[:, 0:1]
-    eta44_x = gradients(eta44, xyt)[:, 0:1]
 
-    r1 = (
-    C44_x * w_x
-    + C44 * w_xx
-    + C44 * w_yy
-    + sig22 * w_yy
-    + eta44_x * w_xt            # this term is correct
-    + eta44 * (w_xxt + w_yyt)   # ✅ correct viscoelastic term
-    - rho * w_tt
-)/ C0
+# --------------------------------------------------
+# Residual for FUNCTIONALLY GRADED HALF-SPACE
+# --------------------------------------------------
+def residual_halfspace(model, z, params, k, c):
+    """
+    Lower half-space residual with FUNCTIONALLY GRADED rho(z)
+    """
 
+    z.requires_grad_(True)
 
-    # electric residual
-    phi_xx = gradients(gradients(phi, xyt)[:, 0:1], xyt)[:, 0:1]
-    phi_yy = gradients(gradients(phi, xyt)[:, 1:2], xyt)[:, 1:2]
+    V = model(z)
 
-    r2 = phi_xx + phi_yy
+    # derivatives of V
+    V_z  = gradients(V, z)
+    V_zz = gradients(V_z, z)
 
-    return r1, r2
+    # functional grading
+    beta2 = params["beta2"]
+
+    mu44 = params["mu44_0"] * (1.0 - torch.sin(beta2 * z))
+    mu66 = params["mu66_0"] * (1.0 - torch.sin(beta2 * z))
+    rho  = params["rho_0"]  * (1.0 - torch.sin(beta2 * z))
+    P    = params["P_0"]    * (1.0 - torch.sin(beta2 * z))
+
+    # derivative of rho(z)
+    rho_z = gradients(rho, z)
+
+    g = params["g"]
+
+    # stiffness-like term
+    A_h = mu66 - P / 2.0 - rho * g * z / 2.0
+
+    # residual (✔ fully correct)
+    r = (
+        gradients(mu44 * V_z, z)
+        - k**2 * A_h * V
+        - (g / 2.0) * (rho + z * rho_z) * V_z
+        - (g / 2.0) * (rho * z) * V_zz
+        + rho * k**2 * c**2 * V
+    )
+
+    return r
