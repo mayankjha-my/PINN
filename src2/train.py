@@ -38,10 +38,19 @@ def train_for_single_k(
     model_layer.to(DEVICE)
     model_half.to(DEVICE)
 
+
+
     # --------------------------------------------------
     # Trainable phase velocity
     # --------------------------------------------------
-    c = torch.nn.Parameter(torch.tensor(0.8, device=DEVICE))
+    c = torch.nn.Parameter(
+    torch.sqrt(
+        torch.tensor(
+            params_layer["mu44_0"] / params_layer["rho_0"],
+            device=DEVICE
+        )
+    )
+)
 
     # --------------------------------------------------
     # Parameters
@@ -49,6 +58,8 @@ def train_for_single_k(
     params_layer = CONFIG["LAYER"]
     params_half  = CONFIG["HALFSPACE"]
     geom         = CONFIG["GEOMETRY"]
+    H = geom["H"]
+
 
     # --------------------------------------------------
     # Optimizer
@@ -84,12 +95,12 @@ def train_for_single_k(
             z_far,
             params_layer,
             params_half,
-            k,
+            k*H,
             c,
             w_pde=1.0,
-            w_bc=5.0,
-            w_int=10.0,
-            w_far=20.0
+            w_bc=0.1,
+            w_int=0.01,
+            w_far=0.001
         )
 
         loss.backward()
@@ -119,10 +130,11 @@ def train_dispersion():
     """
 
     k_vals = torch.linspace(
-        CONFIG["GEOMETRY"]["k_min"],
-        CONFIG["GEOMETRY"]["k_max"],
-        CONFIG["GEOMETRY"]["num_k"]
-    )
+    max(CONFIG["GEOMETRY"]["k_min"], 0.2),
+    CONFIG["GEOMETRY"]["k_max"],
+    CONFIG["GEOMETRY"]["num_k"]
+)
+
 
     dispersion = []
 

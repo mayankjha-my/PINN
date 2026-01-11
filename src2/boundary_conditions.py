@@ -16,8 +16,9 @@ def top_surface_bc(model_layer, z_top, material_params):
     z_top.requires_grad_(True)
 
     pred = model_layer(z_top)
-    V_R = pred[:, 0:1]
-    V_I = pred[:, 1:2]
+    scale = 1e-2
+    V_R = scale * pred[:, 0:1]
+    V_I = scale * pred[:, 1:2]
 
     V_R_z = gradients(V_R, z_top)
     V_I_z = gradients(V_I, z_top)
@@ -25,7 +26,7 @@ def top_surface_bc(model_layer, z_top, material_params):
     beta1 = material_params["beta1"]
     mu44  = material_params["mu44_0"] * (1.0 + torch.sin(beta1 * z_top))
 
-    tau_R = mu44 * V_R_z
+    tau_R = (mu44 * V_R_z)
     tau_I = mu44 * V_I_z
 
     return tau_R, tau_I
@@ -48,11 +49,11 @@ def interface_layer_halfspace(model_layer, model_half, z_int,
 
     # layer fields
     pred_l = model_layer(z_int)
-    V_R = pred_l[:, 0:1]
-    V_I = pred_l[:, 1:2]
-
-    # half-space field
-    V_h = model_half(z_int)
+    scale = 1e-2
+    V_R = scale * pred_l[:, 0:1]
+    V_I = scale * pred_l[:, 1:2]
+    V_h = scale * model_half(z_int)
+  
 
     # derivatives
     V_R_z = gradients(V_R, z_int)
@@ -83,6 +84,8 @@ def halfspace_far_field_bc(model_half, z_far):
     V -> 0 as z -> infinity (z = 10)
     """
 
-    V = model_half(z_far)
+    scale = 1e-2
+    V = scale * model_half(z_far)
+
 
     return V

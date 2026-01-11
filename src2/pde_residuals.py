@@ -4,19 +4,12 @@ import torch
 # Gradient utility (included directly)
 # --------------------------------------------------
 def gradients(u, x):
-    """
-    Computes du/dx using torch.autograd
-    u : (N,1)
-    x : (N,1)
-    """
     return torch.autograd.grad(
-        outputs=u,
-        inputs=x,
+        u, x,
         grad_outputs=torch.ones_like(u),
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True
+        create_graph=True
     )[0]
+
 
 
 # --------------------------------------------------
@@ -31,15 +24,17 @@ def residual_layer_coupled(model, z, params, k, c):
     z.requires_grad_(True)
 
     pred = model(z)
-    V_R = pred[:, 0:1]   # real part
-    V_I = pred[:, 1:2]   # imaginary part
+    scale = 1e-2
+    V_R = scale * pred[:, 0:1]
+    V_I = scale * pred[:, 1:2]
 
     # derivatives
     V_R_z  = gradients(V_R, z)
-    V_R_zz = gradients(V_R_z, z)
+    V_R_zz = gradients(V_R_z[:, 0:1], z)
 
     V_I_z  = gradients(V_I, z)
-    V_I_zz = gradients(V_I_z, z)
+    V_I_zz = gradients(V_I_z[:, 0:1], z)
+
 
     # functional grading
     beta1 = params["beta1"]
@@ -91,11 +86,11 @@ def residual_halfspace(model, z, params, k, c):
 
     z.requires_grad_(True)
 
-    V = model(z)
-
+    V = 1e-2 * model(z)
+    
     # derivatives of V
     V_z  = gradients(V, z)
-    V_zz = gradients(V_z, z)
+    V_zz = gradients(V_z[:, 0:1], z)
 
     # functional grading
     beta2 = params["beta2"]

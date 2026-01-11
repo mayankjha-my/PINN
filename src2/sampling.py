@@ -21,7 +21,7 @@ def sample_domain_points(n_domain, geom):
     """
 
     H = geom.get("H", 1.0)
-    L = geom.get("L", 10.0)
+    L = geom.get("L", 100.0)
 
     # Layer: z ∈ [-H, 0]
     z_layer = sample_uniform(n_domain, -H, 0.0)

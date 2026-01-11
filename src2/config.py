@@ -13,12 +13,15 @@ CONFIG = {
         "mu66_0": 5e9,          # Pa
         "rho_0": 9890.0,           # kg/m^3
         "P_0": 4.0e7,              # Initial stress (Pa)
-        "beta1": 0.007,            # FG parameter
+        "beta1": 0.7,            # FG parameter
 
         # Electromagnetic parameters
         "mu_e": 1,  # Magnetic permeability (H/m)
-        "H0": 1.0,                  # Magnetic field intensity
-        "phi": 0.78539816339        # Inclination angle (rad) = 45°
+        "H0": 1.0,
+        "phi": 0.7853981633974483   # pi/4 in radians
+
+
+
     },
 
     # --------------------------------------------------
@@ -29,7 +32,7 @@ CONFIG = {
         "mu66_0": 6.47e9,           # Pa
         "rho_0": 3400.0,            # kg/m^3
         "P_0": 4.0e7,               # Initial stress (Pa)
-        "beta2": 0.007,             # FG parameter
+        "beta2": 0.7,             # FG parameter
 
         # Gravity
         "g": 9.81                   # m/s^2
@@ -40,7 +43,7 @@ CONFIG = {
     # --------------------------------------------------
     "GEOMETRY": {
         "H": 1.0,                   # Non-dimensional layer thickness
-        "L": 100.0,                  # Truncated half-space depth (10H)
+        "L": 10.0,                  # Truncated half-space depth (10H)
 
         # Wavenumber sweep (non-dimensional)
         "k_min": 0.1,
@@ -53,11 +56,13 @@ CONFIG = {
     # --------------------------------------------------
     "TRAINING": {
         "epochs": 20000,
-        "learning_rate": 1e-3,
+        "learning_rate": 5e-4,
         "loss_weights": {
-            "pde": 1.0,
-            "bc": 10.0,
-            "interface": 10.0
-        }
+    "pde": 1.0,
+    "bc": 0.1,
+    "interface": 0.01,
+    "far": 0.001
+    }
+
     }
 }

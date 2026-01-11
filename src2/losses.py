@@ -40,10 +40,11 @@ def compute_pde_loss(
     )
 
     loss_pde = (
-        mse(rL_R, torch.zeros_like(rL_R)) +
-        mse(rL_I, torch.zeros_like(rL_I)) +
-        mse(rH,   torch.zeros_like(rH))
-    )
+    mse(rL_R, torch.zeros_like(rL_R)) / (rL_R.abs().mean().detach() + 1e-6) +
+    mse(rL_I, torch.zeros_like(rL_I)) / (rL_I.abs().mean().detach() + 1e-6) +
+    mse(rH,   torch.zeros_like(rH))   / (rH.abs().mean().detach()   + 1e-6)
+   )
+
 
     return loss_pde
 
@@ -86,11 +87,12 @@ def compute_interface_loss(
     )
 
     loss_int = (
-        mse(r1, torch.zeros_like(r1)) +
-        mse(r2, torch.zeros_like(r2)) +
-        mse(r3, torch.zeros_like(r3)) +
-        mse(r4, torch.zeros_like(r4))
-    )
+    mse(r1, torch.zeros_like(r1)) +
+    mse(r2, torch.zeros_like(r2)) +
+    0.1 * mse(r3, torch.zeros_like(r3)) +
+    0.1 * mse(r4, torch.zeros_like(r4))
+   )
+
 
     return loss_int
 
@@ -125,10 +127,11 @@ def total_loss(
     params_half,
     k,
     c,
-    w_pde=5.0,
-    w_bc=5.0,
-    w_int=5.0,
-    w_far=5.0
+    w_pde = 1.0,
+    w_bc  = 0.1,
+    w_int = 0.01,
+    w_far = 0.001
+
 ):
     """
     Total PINN loss for dispersion analysis
