@@ -16,7 +16,7 @@ CONFIG = {
         "beta1": 0.7,            # FG parameter
 
         # Electromagnetic parameters
-        "mu_e": 1,  # Magnetic permeability (H/m)
+        "mu_e": 100,  # Magnetic permeability (H/m)
         "H0": 1.0,
         "phi": 0.7853981633974483   # pi/4 in radians
 

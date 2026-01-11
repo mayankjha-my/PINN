@@ -164,16 +164,34 @@ def total_loss(
         model_half, z_far
     )
 
+
+    # Monotonicity penalty for phase velocity c
+    # If c is a tensor or batch, penalize increases
+    def monotonicity_penalty(c_value):
+        # If c is a single value, penalty is zero
+        if not hasattr(c_value, '__len__') or len(c_value) < 2:
+            return 0.0
+        diffs = c_value[1:] - c_value[:-1]
+        penalty = torch.sum(torch.relu(diffs))
+        return penalty
+
+    # If you want to enforce monotonicity over a batch, pass a batch of c values
+    # Here, c is a single value per call, so penalty is zero
+    alpha = 0.1  # Weight for monotonicity penalty
+    mono_penalty = monotonicity_penalty(torch.tensor([c]))
+
     loss_total = (
         w_pde * loss_pde +
         w_bc  * loss_bc +
         w_int * loss_int +
-        w_far * loss_far
+        w_far * loss_far +
+        alpha * mono_penalty
     )
 
     return loss_total, {
         "pde": loss_pde.item(),
         "bc_top": loss_bc.item(),
         "interface": loss_int.item(),
-        "far": loss_far.item()
+        "far": loss_far.item(),
+        "mono_penalty": mono_penalty.item() if hasattr(mono_penalty, 'item') else mono_penalty
     }
