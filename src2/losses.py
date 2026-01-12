@@ -28,7 +28,7 @@ def compute_pde_loss(
     c
 ):
     """
-    PDE residual loss for layer and half-space
+    PDE residual loss for layer and half-space (all variables and parameters are non-dimensional)
     """
 
     rL_R, rL_I = residual_layer_coupled(
@@ -55,7 +55,7 @@ def compute_pde_loss(
 # --------------------------------------------------
 def compute_top_surface_loss(model_layer, z_top, params_layer):
     """
-    Stress-free top surface
+    Stress-free top surface (non-dimensional)
     """
 
     tau_R, tau_I = top_surface_bc(model_layer, z_top, params_layer)
@@ -79,7 +79,7 @@ def compute_interface_loss(
     params_half
 ):
     """
-    Continuity conditions at z = 0
+    Continuity conditions at z = 0 (non-dimensional)
     """
 
     r1, r2, r3, r4 = interface_layer_halfspace(
@@ -103,7 +103,7 @@ def compute_interface_loss(
 # --------------------------------------------------
 def compute_far_field_loss(model_half, z_far):
     """
-    Half-space decay condition
+    Half-space decay condition (non-dimensional)
     """
 
     V = halfspace_far_field_bc(model_half, z_far)
@@ -134,7 +134,7 @@ def total_loss(
     w_far = 5.0,
 ):
     """
-    Total PINN loss for dispersion analysis
+    Total PINN loss for dispersion analysis (all terms non-dimensional)
     """
 
     loss_pde = compute_pde_loss(
@@ -164,37 +164,19 @@ def total_loss(
         model_half, z_far
     )
 
-
-    # Monotonicity penalty for phase velocity c
-    # If c is a tensor or batch, penalize increases
-    def monotonicity_penalty(c_value):
-        # If c is a single value, penalty is zero
-        if not hasattr(c_value, '__len__') or len(c_value) < 2:
-            return 0.0
-        diffs = c_value[1:] - c_value[:-1]
-        penalty = torch.sum(torch.relu(diffs))
-        return penalty
-
-    # If you want to enforce monotonicity over a batch, pass a batch of c values
-    # Here, c is a single value per call, so penalty is zero
-    alpha = 0.1  # Weight for monotonicity penalty
-    mono_penalty = monotonicity_penalty(torch.tensor([c]))
-
+    
     loss_total = (
         w_pde * loss_pde +
         w_bc  * loss_bc +
         w_int * loss_int +
-        w_far * loss_far +
-        alpha * mono_penalty
+        w_far * loss_far 
+       
     )
-
-
-    
+  
    
     return loss_total, {
         "pde": loss_pde.item(),
         "bc_top": loss_bc.item(),
         "interface": loss_int.item(),
-        "far": loss_far.item(),
-        "mono_penalty": mono_penalty.item() if hasattr(mono_penalty, 'item') else mono_penalty
-    }
+        "far": loss_far.item()
+         }

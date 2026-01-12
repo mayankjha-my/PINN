@@ -16,8 +16,8 @@ def sample_uniform(n, low, high):
 def sample_domain_points(n_domain, geom):
     """
     Returns:
-        z_layer   : points in layer domain [-H, 0]
-        z_half    : points in half-space [0, L]
+        z_layer   : points in layer domain [-H, 0] (non-dimensional)
+        z_half    : points in half-space [0, L] (non-dimensional)
     """
 
     H = geom.get("H", 1.0)
@@ -40,7 +40,7 @@ def sample_domain_points(n_domain, geom):
 # --------------------------------------------------
 def sample_top_surface(n_boundary, geom):
     """
-    Top free surface at z = -H
+    Top free surface at z = -H (non-dimensional)
     """
 
     H = geom.get("H", 1.0)
@@ -55,7 +55,7 @@ def sample_top_surface(n_boundary, geom):
 # --------------------------------------------------
 def sample_interface(n_interface):
     """
-    Interface between layer and half-space at z = 0
+    Interface between layer and half-space at z = 0 (non-dimensional)
     """
 
     z_int = torch.zeros((n_interface, 1))
@@ -68,7 +68,7 @@ def sample_interface(n_interface):
 # --------------------------------------------------
 def sample_far_field(n_far, geom):
     """
-    Far-field boundary for half-space at z = L
+    Far-field boundary for half-space at z = L (non-dimensional)
     """
 
     L = geom.get("L", 10.0)

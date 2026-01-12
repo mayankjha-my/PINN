@@ -22,12 +22,12 @@ def top_surface_bc(model_layer, z_top, material_params):
 
     V_R_z = gradients(V_R, z_top)
     V_I_z = gradients(V_I, z_top)
-
+    mu44_0= material_params["mu44_0"]
     beta1 = material_params["beta1"]
     mu44  = material_params["mu44_0"] * (1.0 + torch.sin(beta1 * z_top))
 
-    tau_R = (mu44 * V_R_z)
-    tau_I = mu44 * V_I_z
+    tau_R = (mu44 * V_R_z)/mu44_0
+    tau_I = (mu44 * V_I_z)/mu44_0
 
     return tau_R, tau_I
 
@@ -49,29 +49,39 @@ def interface_layer_halfspace(model_layer, model_half, z_int,
 
     # layer fields
     pred_l = model_layer(z_int)
+    pred_h = model_half(z_int)   # Half-space output
     scale = 1e-2
     V_R = scale * pred_l[:, 0:1]
     V_I = scale * pred_l[:, 1:2]
-    V_h = scale * model_half(z_int)
+   # Half-space: handle both cases (1 or 2 outputs)
+    if pred_h.shape[1] == 2:
+        # Half-space outputs 2 values (complex)
+        V_R_h = scale * pred_h[:, 0:1]  # Real part of half-space
+        V_I_h = scale * pred_h[:, 1:2]  # Imag part of half-space
+    else:
+        # Half-space outputs 1 value (assumed real)
+        V_R_h = scale * pred_h           # Real part = output
+        V_I_h = torch.zeros_like(V_R_h)  # Imag part = 0
   
 
     # derivatives
     V_R_z = gradients(V_R, z_int)
     V_I_z = gradients(V_I, z_int)
-    V_h_z = gradients(V_h, z_int)
+    V_R_z_h = gradients(V_R_h, z_int)
+    V_I_z_h = gradients(V_I_h, z_int) if pred_h.shape[1] == 2 else torch.zeros_like(V_R_z_h)
 
     # graded shear moduli
     beta1 = params_layer["beta1"]
     beta2 = params_half["beta2"]
-
+    mu44_0= params_layer["mu44_0"]
     mu44_l = params_layer["mu44_0"] * (1.0 + torch.sin(beta1 * z_int))
     mu44_h = params_half["mu44_0"] * (1.0 - torch.sin(beta2 * z_int))
 
     return (
-        V_R - V_h,                      # displacement continuity
-        V_I,                            # imaginary part vanishes
-        mu44_l * V_R_z - mu44_h * V_h_z,  # stress continuity (real)
-        mu44_l * V_I_z                  # imaginary stress = 0
+        V_R - V_R_h,                    # Real displacement continuity
+        V_I - V_I_h,                    # Imag displacement continuity
+        (mu44_l * V_R_z - mu44_h * V_R_z_h),  # Real stress continuity
+        (mu44_l * V_I_z - mu44_h * V_I_z_h)   # Imag stress continuity
     )
 
 
