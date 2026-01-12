@@ -47,7 +47,7 @@ CONFIG = {
 
         # Wavenumber sweep (non-dimensional)
         "k_min": 0.1,
-        "k_max": 5.0,
+        "k_max": 1.0,
         "num_k": 40
     },
 
