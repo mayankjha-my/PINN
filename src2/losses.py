@@ -129,9 +129,9 @@ def total_loss(
     k,
     c,
     w_pde = 1.0,
-    w_bc  =10.0,
-    w_int = 50.0,
-    w_far = 5.0,
+    w_bc  =0.1,
+    w_int = 0.01,
+    w_far = 0.001,
 ):
     """
     Total PINN loss for dispersion analysis (all terms non-dimensional)

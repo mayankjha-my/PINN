@@ -80,8 +80,8 @@ def interface_layer_halfspace(model_layer, model_half, z_int,
     return (
         V_R - V_R_h,                    # Real displacement continuity
         V_I - V_I_h,                    # Imag displacement continuity
-        (mu44_l * V_R_z - mu44_h * V_R_z_h),  # Real stress continuity
-        (mu44_l * V_I_z - mu44_h * V_I_z_h)   # Imag stress continuity
+        ((mu44_l /mu44_0)* V_R_z - (mu44_h/mu44_0) * V_R_z_h),  # Real stress continuity
+        ((mu44_l /mu44_0)* V_I_z - (mu44_h/mu44_0) * V_I_z_h)   # Imag stress continuity
     )
 
 
