@@ -5,8 +5,7 @@ def gradients(u, x):
     return torch.autograd.grad(
         u, x,
         grad_outputs=torch.ones_like(u),
-        create_graph=True,
-        retain_graph=True
+        create_graph=True
     )[0]
 
 # --------------------------------------------------
@@ -44,7 +43,10 @@ def residual_layer_coupled(model, z, params, k, c):
     # EM parameters (all non-dimensional)
     mu_e = params["mu_e"]
     H0 = params["H0"]
-    phi = params.get("phi_tensor", torch.tensor(params["phi"], device=z.device))
+    phi = params.get(
+    "phi_tensor",
+    torch.tensor(params["phi"], device=z.device, dtype=z.dtype)
+)
 
     # Phase velocity squared (non-dimensional)
     c2 = c**2

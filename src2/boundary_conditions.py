@@ -94,8 +94,8 @@ def halfspace_far_field_bc(model_half, z_far):
     V -> 0 as z -> infinity (z = 10)
     """
 
-    scale = 1e-2
-    V = scale * model_half(z_far)
+    
+    V = model_half(z_far)
 
 
     return V
