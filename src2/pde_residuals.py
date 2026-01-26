@@ -5,69 +5,88 @@ def gradients(u, x):
     return torch.autograd.grad(
         u, x,
         grad_outputs=torch.ones_like(u),
-        create_graph=True,
-        retain_graph=True
+        create_graph=True        
     )[0]
 
 # --------------------------------------------------
 # Residual for FUNCTIONALLY GRADED LAYER (FIXED)
 # --------------------------------------------------
-def residual_layer_coupled(model, z, params, k, c):
+def residual_layer_coupled(model, z, params, k,c):
     """
-    Layer residual - CORRECTED according to actual PDE.
+    PINN residual for:
+    A1 * V''(z) + A2 * V'(z) + A3 * V(z) = 0
+    k=kH
+    c=c/
     """
+
     z.requires_grad_(True)
 
-    # Forward pass (no scaling, already non-dimensional)
-    pred = model(z)
-    V_R = pred[:, 0:1]
-    V_I = pred[:, 1:2]
+    # ---------------------------------
+    # Network output
+    # ---------------------------------
+    V = model(z)          # complex-valued split assumed
+    V_R = V[:, 0:1]       # real part
+    V_I = V[:, 1:2]       # imaginary part
 
+    # ---------------------------------
     # Derivatives
-    V_R_z = gradients(V_R, z)
+    # ---------------------------------
+    V_R_z  = gradients(V_R, z)
     V_R_zz = gradients(V_R_z, z)
-    V_I_z = gradients(V_I, z)
+    V_I_z  = gradients(V_I, z)
     V_I_zz = gradients(V_I_z, z)
 
-    # Functionally graded properties (all non-dimensional)
-    beta1 = params["beta1"]
-    z_sin = torch.sin(beta1 * z)
+    # ---------------------------------
+    # Parameters
+    # ---------------------------------
     mu44_0 = params["mu44_0"]
-    mu44 = mu44_0 * (1.0 + z_sin)
-    mu66 = params["mu66_0"] * (1.0 + z_sin)
-    rho = params["rho_0"] * (1.0 + z_sin)
-    P = params["P_0"] * (1.0 + z_sin)
+    mu66_0 = params["mu66_0"]
+    rho_0  = params["rho_0"]
+    P_0    = params["P_0"]
 
-    # Gradient of mu44 (for product rule)
-    mu44_z = gradients(mu44, z)
-
-    # EM parameters (all non-dimensional)
     mu_e = params["mu_e"]
-    H0 = params["H0"]
-    phi = params.get("phi_tensor", torch.tensor(params["phi"], device=z.device))
+    H0   = params["H0"]
+    phi  = params.get("phi_tensor", torch.tensor(params["phi"], device=z.device)
+    )
 
-    # Phase velocity squared (non-dimensional)
-    c2 = c**2
+    beta1 = params["beta1"]
 
-    # ----- REAL part residual (non-dimensional) -----
-    term1 = mu44 * V_R_zz + mu44_z * V_R_z
-    term2 = -k**2 * mu66 * V_R
-    term3 = (P/2.0) * k**2 * V_R
-    term4_em1 = -mu_e * H0**2 * (torch.cos(phi))**2 * k**2 * V_R
-    term4_em2 = +mu_e * H0**2 * torch.sin(2.0 * phi) * k * V_I_z
-    term4_em3 = mu_e * H0**2 * (torch.sin(phi))**2 * V_R_zz
-    term5 = -rho * k**2 * c2 * V_R
-    r_real = (term1 + term2 + term3 + term4_em1 + term4_em2 + term4_em3 + term5) / mu44_0
+    # ---------------------------------
+    # Coefficients A1, A2, A3
+    # ---------------------------------
+    A1 = mu44_0 + mu_e * H0**2 * (torch.sin(phi))**2
 
-    # ----- IMAG part residual (non-dimensional) -----
-    term1_imag = mu44 * V_I_zz + mu44_z * V_I_z
-    term2_imag = -k**2 * mu66 * V_I
-    term3_imag = (P/2.0) * k**2 * V_I
-    term4_em1_imag = -mu_e * H0**2 * (torch.cos(phi))**2 * k**2 * V_I
-    term4_em2_imag = -mu_e * H0**2 * torch.sin(2.0 * phi) * k * V_R_z
-    term4_em3_imag = mu_e * H0**2 * (torch.sin(phi))**2 * V_I_zz
-    term5_imag = -rho * k**2 * c2 * V_I
-    r_imag = (term1_imag + term2_imag + term3_imag + term4_em1_imag + term4_em2_imag + term4_em3_imag + term5_imag) / mu44_0
+    A2_real = beta1 * mu44_0
+    A2_imag = -k * mu_e * H0**2 * (torch.sin(2.0 * phi))
+
+    A3 = (
+        rho_0 *(k*c)**2
+        - k**2 * (
+            mu66_0
+            + mu_e * H0**2 * (torch.cos(phi))**2
+            - P_0 / 2.0
+        )
+    )
+
+    # ---------------------------------
+    # REAL residual
+    # ---------------------------------
+    r_real = (
+        A1 * V_R_zz
+        + A2_real * V_R_z
+        - A2_imag * V_I_z
+        + A3 * V_R
+    )/mu44_0
+
+    # ---------------------------------
+    # IMAG residual
+    # ---------------------------------
+    r_imag = (
+        A1 * V_I_zz
+        + A2_real * V_I_z
+        + A2_imag * V_R_z
+        + A3 * V_I
+    )/mu44_0
 
     return r_real, r_imag
 
@@ -76,40 +95,55 @@ def residual_layer_coupled(model, z, params, k, c):
 # --------------------------------------------------
 def residual_halfspace(model, z, params, k, c):
     """
-    Half-space residual - CORRECTED gravity terms.
+    PINN residual for half-space equation with gravity and heterogeneity
     """
+
     z.requires_grad_(True)
 
-    # Forward pass (no scaling, already non-dimensional)
+   # Forward pass (no scaling, already non-dimensional)
     V = model(z)
     V_z = gradients(V, z)
     V_zz = gradients(V_z, z)
 
-    # Functionally graded properties (all non-dimensional)
-    beta2 = params["beta2"]
-    z_sin = torch.sin(beta2 * z)
+    # ---------------------------------
+    # Parameters
+    # ---------------------------------
     mu44_0 = params["mu44_0"]
-    mu44 = mu44_0 * (1.0 - z_sin)
-    mu66 = params["mu66_0"] * (1.0 - z_sin)
-    rho = params["rho_0"] * (1.0 - z_sin)
-    P = params["P_0"] * (1.0 - z_sin)
+    mu66_0 = params["mu66_0"]
+    rho_0  = params["rho_0"]
+    P_0    = params["P_0"]
 
-    # Gradients
-    mu44_z = gradients(mu44, z)
-    rho_z = gradients(rho, z)
+    beta2 = params["beta2"]
+    g     = params["g"]
 
-    # Gravity (non-dimensional)
-    g = params["g"]
-    c2 = c**2
+    # ---------------------------------
+    # z-dependent coefficients
+    # ---------------------------------
+    A1 = mu44_0 - (rho_0 * g * z) / 2.0
 
-    # ----- CORRECT gravity terms from PDE (non-dimensional) -----
-    term1 = mu44 * V_zz + mu44_z * V_z
-    term2 = -k**2 * mu66 * V
-    term3 = (P/2.0) * k**2 * V
-    term4 = (k**2 * rho * g * z / 2.0) * V
-    term5a = -(g / 2.0) * (rho + z * rho_z) * V_z
-    term5b = -(g / 2.0) * (rho * z) * V_zz
-    term6 = -rho * k**2 * c2 * V
-    r = (term1 + term2 + term3 + term4 + term5a + term5b + term6) / mu44_0
+    A2 = (
+        beta2 * mu44_0
+        - (rho_0 * g) / 2.0
+        - (beta2 * rho_0 * g * z) / 2.0
+    )
 
+    A3 = (
+        rho_0 * (k*c)**2 - k**2 * (
+            mu66_0
+            - P_0 / 2.0
+            - (rho_0 * g * z) / 2.0
+        )
+    )
+
+    # ---------------------------------
+    # residual
+    # ---------------------------------
+    r = (
+        A1 * V_zz
+        + A2 * V_z
+        + A3 * V
+    )/mu44_0
+
+    
     return r
+

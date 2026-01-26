@@ -35,7 +35,7 @@ def compute_pde_loss(
         model_layer, z_layer, params_layer, k, c
     )
 
-    rH = residual_halfspace(
+    rH  = residual_halfspace(
         model_half, z_half, params_half, k, c
     )
 
@@ -43,8 +43,8 @@ def compute_pde_loss(
     loss_pde = (
         mse(rL_R, torch.zeros_like(rL_R)) +
         mse(rL_I, torch.zeros_like(rL_I)) +
-        mse(rH, torch.zeros_like(rH))
-    )
+        mse(rH, torch.zeros_like(rH)) 
+)
 
 
     return loss_pde
@@ -113,6 +113,7 @@ def compute_far_field_loss(model_half, z_far):
     return loss_far
 
 
+
 # --------------------------------------------------
 # Total loss
 # --------------------------------------------------
@@ -128,14 +129,21 @@ def total_loss(
     params_half,
     k,
     c,
-    w_pde = 1.0,
-    w_bc  =0.1,
+    w_pde = 10.0,
+    w_bc  =0.5,
     w_int = 0.01,
     w_far = 0.001,
 ):
     """
     Total PINN loss for dispersion analysis (all terms non-dimensional)
     """
+    # --------------------------------------------------
+# Amplitude fixing at top surface (CRITICAL)
+# --------------------------------------------------
+    V_top = model_layer(z_top)
+    amp_loss = mse(V_top, torch.ones_like(V_top))
+
+
 
     loss_pde = compute_pde_loss(
         model_layer,
@@ -163,13 +171,14 @@ def total_loss(
     loss_far = compute_far_field_loss(
         model_half, z_far
     )
-
+   
     
     loss_total = (
         w_pde * loss_pde +
         w_bc  * loss_bc +
         w_int * loss_int +
-        w_far * loss_far 
+        w_far * loss_far +
+        0.2   * amp_loss 
        
     )
   
@@ -178,5 +187,5 @@ def total_loss(
         "pde": loss_pde.item(),
         "bc_top": loss_bc.item(),
         "interface": loss_int.item(),
-        "far": loss_far.item()
+        "far": loss_far.item(),
          }

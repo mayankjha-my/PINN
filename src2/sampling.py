@@ -45,9 +45,15 @@ def sample_top_surface(n_boundary, geom):
 
     H = geom.get("H", 1.0)
 
-    z_top = torch.full((n_boundary, 1), -H)
+    z_top = torch.full(
+        (n_boundary, 1),
+        -float(H),                # force float value
+        dtype=torch.float32,      # force float dtype
+        device=DEVICE
+    )
 
-    return z_top.to(DEVICE)
+    return z_top
+
 
 
 # --------------------------------------------------

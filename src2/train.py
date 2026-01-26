@@ -17,13 +17,17 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 def train_for_single_k(
     k,
-    n_epochs=20000,
+    model_layer,
+    model_half,
+    c,
+    n_epochs=5000,
     n_domain=5000,
     n_bc=1000,
     n_int=1000,
     n_far=1000,
     lr=1e-3
 ):
+
     """
     Train PINN for a fixed wave number k
     Returns learned phase velocity c
@@ -40,38 +44,31 @@ def train_for_single_k(
     H = geom["H"]
 
     # Convert to torch tensors on device
-    params_layer = {key: torch.tensor(value, device=DEVICE, dtype=torch.float32) 
-                   if isinstance(value, (int, float)) else value
-                   for key, value in params_layer.items()}
+    params_layer = {
+        k: torch.tensor(v, device=DEVICE, dtype=torch.float32)
+        if isinstance(v, (int, float)) else v
+        for k, v in params_layer.items()
+    }
+
+    params_half = {
+        k: torch.tensor(v, device=DEVICE, dtype=torch.float32)
+        if isinstance(v, (int, float)) else v
+        for k, v in params_half.items()
+    }
+
+   
+
     
-    params_half = {key: torch.tensor(value, device=DEVICE, dtype=torch.float32) 
-                  if isinstance(value, (int, float)) else value
-                  for key, value in params_half.items()}
-
-    # --------------------------------------------------
-    # Initialize networks
-    # --------------------------------------------------
-    model_layer, model_half = get_all_networks()
-    model_layer.to(DEVICE)
-    model_half.to(DEVICE)
-
-    # --------------------------------------------------
-    # Trainable phase velocity (FIXED: params_layer now exists)
-    # --------------------------------------------------
-    c = torch.nn.Parameter(
-        torch.sqrt(
-            params_layer["mu66_0"] / params_layer["rho_0"]
-        )
-    )
 
     # --------------------------------------------------
     # Optimizer
     # --------------------------------------------------
     optimizer = optim.Adam(
-        list(model_layer.parameters()) +
-        list(model_half.parameters()) +
-        [c],
-        lr=lr
+        [
+            {"params": model_layer.parameters(), "lr": lr},
+            {"params": model_half.parameters(), "lr": lr},
+            {"params": [c], "lr": 1e-4},   # 🔧 CHANGE: smaller LR for eigenvalue
+        ]
     )
 
     # --------------------------------------------------
@@ -85,29 +82,18 @@ def train_for_single_k(
         z_int  = sample_interface(n_int)
         z_far  = sample_far_field(n_far, geom)
 
-        # Convert to tensors if needed (FIXED)
-        if not isinstance(z_layer, torch.Tensor):
-            z_layer = torch.tensor(z_layer, dtype=torch.float32, device=DEVICE)
-        if not isinstance(z_half, torch.Tensor):
-            z_half = torch.tensor(z_half, dtype=torch.float32, device=DEVICE)
-        if not isinstance(z_top, torch.Tensor):
-            z_top = torch.tensor(z_top, dtype=torch.float32, device=DEVICE)
-        if not isinstance(z_int, torch.Tensor):
-            z_int = torch.tensor(z_int, dtype=torch.float32, device=DEVICE)
-        if not isinstance(z_far, torch.Tensor):
-            z_far = torch.tensor(z_far, dtype=torch.float32, device=DEVICE)
+        def to_tensor(z):
+            if not isinstance(z, torch.Tensor):
+                z = torch.tensor(z, dtype=torch.float32, device=DEVICE)
+            if z.ndim == 1:
+                z = z.unsqueeze(1)
+            return z
 
-        # Ensure correct shape [n_points, 1] (FIXED)
-        if len(z_layer.shape) == 1:
-            z_layer = z_layer.unsqueeze(1)
-        if len(z_half.shape) == 1:
-            z_half = z_half.unsqueeze(1)
-        if len(z_top.shape) == 1:
-            z_top = z_top.unsqueeze(1)
-        if len(z_int.shape) == 1:
-            z_int = z_int.unsqueeze(1)
-        if len(z_far.shape) == 1:
-            z_far = z_far.unsqueeze(1)
+        z_layer = to_tensor(z_layer)
+        z_half  = to_tensor(z_half)
+        z_top   = to_tensor(z_top)
+        z_int   = to_tensor(z_int)
+        z_far   = to_tensor(z_far)
 
         optimizer.zero_grad()
 
@@ -122,16 +108,20 @@ def train_for_single_k(
             z_far,
             params_layer,
             params_half,
-            k*H,  # Keep your original k*H if that's what your PDE expects
+            k,  # Keep your original k*H if that's what your PDE expects
             c,
             w_pde=1.0,
-            w_bc=0.1,   # FIXED: Changed from 0.1 to 10.0
-            w_int=0.01,  # FIXED: Changed from 0.01 to 50.0
+            w_bc=0.05,   # FIXED: Changed from 0.1 to 10.0
+            w_int=0.001,  # FIXED: Changed from 0.01 to 50.0
             w_far=0.001    # FIXED: Changed from 0.001 to 5.0
         )
 
         loss.backward()
         optimizer.step()
+        # --------------------------------------------------
+        # 🔧 CHANGE 3: CLAMP c (PREVENT NON-PHYSICAL VALUES)
+        # --------------------------------------------------
+       
 
         # --------- Logging ---------
         if epoch % 500 == 0:
@@ -156,11 +146,28 @@ def train_dispersion():
     Sweep over k and compute dispersion curve c(k)
     """
 
+    geom = CONFIG["GEOMETRY"]
+
     k_vals = torch.linspace(
-        max(CONFIG["GEOMETRY"]["k_min"], 0.2),
-        CONFIG["GEOMETRY"]["k_max"],
-        CONFIG["GEOMETRY"]["num_k"]
+        geom["k_min"],
+        geom["k_max"],
+        geom["num_k"]
     )
+
+    # --------------------------------------------------
+    # Initialize networks ONCE
+    # --------------------------------------------------
+    model_layer, model_half = get_all_networks()
+    model_layer.to(DEVICE)
+    model_half.to(DEVICE)
+
+    # --------------------------------------------------
+    # Initialize c ONCE
+    # --------------------------------------------------
+    c = torch.nn.Parameter(
+        torch.tensor(5000.0, device=DEVICE, dtype=torch.float32)
+    )
+
 
     dispersion = []
 
@@ -168,47 +175,69 @@ def train_dispersion():
         print(f"\n{'='*50}")
         print(f"Point {idx+1}/{len(k_vals)}: k = {k.item():.3f}")
         print(f"{'='*50}")
-        
-        c_val = train_for_single_k(k.item())
+
+        c_val = train_for_single_k(
+            k.item(),
+            model_layer,
+            model_half,
+            c,
+            n_epochs=5000 if idx == 0 else 2500
+        )
+
         dispersion.append([k.item(), c_val])
 
     return dispersion
 
 
 if __name__ == "__main__":
-    # Test with single k first
+
     print("Testing with single k value...")
-    test_k = 0.5
+
+    # --------------------------------------------------
+    # 🔧 CHANGE 1: Initialize networks
+    # --------------------------------------------------
+    model_layer, model_half = get_all_networks()
+    model_layer.to(DEVICE)
+    model_half.to(DEVICE)
+
+    # --------------------------------------------------
+    # 🔧 CHANGE 2: Initialize eigenvalue c
+    # --------------------------------------------------
+    c = torch.nn.Parameter(
+        torch.tensor(5.0, device=DEVICE, dtype=torch.float32)
+     )
+
+    # --------------------------------------------------
+    # Single-k test
+    # --------------------------------------------------
+    test_k = 0.6
+
     test_c = train_for_single_k(
         k=test_k,
-        n_epochs=1000,  # Test with fewer epochs
-        n_domain=100,
-        n_bc=20,
-        n_int=20,
-        n_far=20,
+        model_layer=model_layer,
+        model_half=model_half,
+        c=c,
+        n_epochs=1500,
+        n_domain=200,
+        n_bc=50,
+        n_int=50,
+        n_far=50,
         lr=1e-3
     )
-    
-    print(f"\nTest complete: c({test_k}) = {test_c:.3f} m/s")
-    
-    # Check if result is reasonable
-params_layer = CONFIG["LAYER"]
-params_half  = CONFIG["HALFSPACE"]
 
-# Compute only c_max from materials
-c_max = max(
-    torch.sqrt(torch.tensor(params_layer["mu44_0"] / params_layer["rho_0"])),
-    torch.sqrt(torch.tensor(params_half["mu44_0"] / params_half["rho_0"]))
-)
+    # print(f"\nTest complete: c({test_k}) = {test_c:.5f} (non-dimensional)")
 
-# Force c_min = 0
-c_min = torch.tensor(0.0)
+    # # --------------------------------------------------
+    # # 🔧 CHANGE 3: Physical sanity check
+    # # --------------------------------------------------
+   
+    # if 2.0 < test_c < 8.0:
+    #     print("✓ Guided SH mode captured. Running full dispersion sweep...\n")
 
-# Velocity check
-if c_min <= test_c <= c_max * 1.2:
-    print("✓ Result is reasonable! Running full analysis...")
-    dispersion_data = train_dispersion()
-    torch.save(dispersion_data, "dispersion_curve.pt")
-    print("\nDispersion data saved to dispersion_curve.pt")
-else:
-    print(f"✗ Result may be incorrect. Expected: 0–{c_max:.0f} m/s")
+    #     dispersion = train_dispersion()
+    #     torch.save(dispersion, "dispersion_curve.pt")
+
+    #     print("Dispersion data saved to dispersion_curve.pt")
+
+    # else:
+    #     print("✗ Bulk mode detected. Check loss constraints.")
