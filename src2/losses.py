@@ -130,9 +130,9 @@ def total_loss(
     k,
     c,
     w_pde = 10.0,
-    w_bc  =0.5,
-    w_int = 0.01,
-    w_far = 0.001,
+    w_bc  =1.0,
+    w_int = 1,
+    w_far = 0.1,
 ):
     """
     Total PINN loss for dispersion analysis (all terms non-dimensional)
@@ -140,8 +140,10 @@ def total_loss(
     # --------------------------------------------------
 # Amplitude fixing at top surface (CRITICAL)
 # --------------------------------------------------
-    V_top = model_layer(z_top)
-    amp_loss = mse(V_top, torch.ones_like(V_top))
+    pred_top = model_layer(z_top)
+    V_R_top = pred_top[:, 0:1]          # real part only
+
+    amp_loss = mse(V_R_top, torch.ones_like(V_R_top))
 
 
 
@@ -178,7 +180,7 @@ def total_loss(
         w_bc  * loss_bc +
         w_int * loss_int +
         w_far * loss_far +
-        0.2   * amp_loss 
+        0.1   * amp_loss 
        
     )
   
@@ -188,4 +190,5 @@ def total_loss(
         "bc_top": loss_bc.item(),
         "interface": loss_int.item(),
         "far": loss_far.item(),
+         "amplitude": amp_loss.item()
          }

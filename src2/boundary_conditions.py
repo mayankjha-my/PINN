@@ -13,12 +13,13 @@ def top_surface_bc(model_layer, z_top, material_params):
     Applied to both real and imaginary parts
     """
 
-    z_top.requires_grad_(True)
+
+    z_top = z_top.clone().detach().requires_grad_(True)
+
 
     pred = model_layer(z_top)
-    scale = 1e-2
-    V_R = scale * pred[:, 0:1]
-    V_I = scale * pred[:, 1:2]
+    V_R = pred[:, 0:1]
+    V_I = pred[:, 1:2]
 
     V_R_z = gradients(V_R, z_top)
     V_I_z = gradients(V_I, z_top)
@@ -44,15 +45,15 @@ def interface_layer_halfspace(model_layer, model_half, z_int,
     mu44^l * dV_I^l/dz = 0
     """
 
-    z_int.requires_grad_(True)
+    z_int = z_int.clone().detach().requires_grad_(True)
 
     # layer fields
     pred_l = model_layer(z_int)
     pred_h = model_half(z_int)   # Half-space output
+
     
-    scale = 1e-2
-    V_R = scale * pred_l[:, 0:1]
-    V_I = scale * pred_l[:, 1:2]
+    V_R = pred_l[:, 0:1]
+    V_I = pred_l[:, 1:2]
    # Half-space: handle both cases (1 or 2 outputs)
     if pred_h.shape[1] == 2:
         # Half-space outputs 2 values (complex)
@@ -96,7 +97,6 @@ def halfspace_far_field_bc(model_half, z_far):
     Half-space decay condition:
     V -> 0 as z -> infinity (z = 10)
     """
-
     
     V = model_half(z_far)
 

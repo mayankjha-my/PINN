@@ -19,7 +19,7 @@ def residual_layer_coupled(model, z, params, k,c):
     c=c/
     """
 
-    z.requires_grad_(True)
+    z = z.clone().detach().requires_grad_(True)
 
     # ---------------------------------
     # Network output
@@ -98,7 +98,8 @@ def residual_halfspace(model, z, params, k, c):
     PINN residual for half-space equation with gravity and heterogeneity
     """
 
-    z.requires_grad_(True)
+    z = z.clone().detach().requires_grad_(True)
+
 
    # Forward pass (no scaling, already non-dimensional)
     V = model(z)

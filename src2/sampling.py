@@ -7,8 +7,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # Utility: uniform sampling
 # --------------------------------------------------
 def sample_uniform(n, low, high):
-    return low + (high - low) * torch.rand(n, 1)
-
+    return low + (high - low) * torch.rand(
+        n, 1, device=DEVICE, dtype=torch.float32
+    )
 
 # --------------------------------------------------
 # Domain sampling
@@ -21,7 +22,7 @@ def sample_domain_points(n_domain, geom):
     """
 
     H = geom.get("H", 1.0)
-    L = geom.get("L", 100.0)
+    L = geom.get("L", 29.0)
 
     # Layer: z ∈ [-H, 0]
     z_layer = sample_uniform(n_domain, -H, 0.0)
@@ -77,7 +78,7 @@ def sample_far_field(n_far, geom):
     Far-field boundary for half-space at z = L (non-dimensional)
     """
 
-    L = geom.get("L", 10.0)
+    L = geom.get("L", 29.0)
 
     z_far = torch.full((n_far, 1), L)
 
