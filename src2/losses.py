@@ -179,8 +179,7 @@ def total_loss(
         w_pde * loss_pde +
         w_bc  * loss_bc +
         w_int * loss_int +
-        w_far * loss_far +
-        0.1   * amp_loss 
+        w_far * loss_far         
        
     )
   
@@ -189,6 +188,5 @@ def total_loss(
         "pde": loss_pde.item(),
         "bc_top": loss_bc.item(),
         "interface": loss_int.item(),
-        "far": loss_far.item(),
-         "amplitude": amp_loss.item()
+        "far": loss_far.item()
          }

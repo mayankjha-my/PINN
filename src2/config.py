@@ -13,16 +13,12 @@ CONFIG = {
         "mu66_0": 5e9,          # Pa
         "rho_0": 9890.0,           # kg/m^3
         "P_0": 1.0e9,              # Initial stress (Pa)
-        "beta1": 0.5,            # FG parameter
+        "beta1": 5,            # FG parameter
             
         # Electromagnetic parameters
         "mu_e": 0.3*4.35e9,  # Magnetic permeability (H/m)
         "H0": 1.0,
         "phi": 0.52359877559   # = pi/6 radians
-
-
-
-
     },
 
     # --------------------------------------------------
@@ -33,7 +29,7 @@ CONFIG = {
         "mu66_0": 6.47e9,           # Pa
         "rho_0": 3400.0,            # kg/m^3
         "P_0": 1.0e9,               # Initial stress (Pa)
-        "beta2":0.5,             # FG parameter
+        "beta2":5,             # FG parameter
             
         # Gravity
         "g": 9.81                   # m/s^2
@@ -43,13 +39,13 @@ CONFIG = {
     # Geometry & Dispersion Settings
     # --------------------------------------------------
     "GEOMETRY": {
-        "H": 0.1,                   # Non-dimensional layer thickness
+        "H": 5,                   # Non-dimensional layer thickness
         "L": 29*0.1,                  # Truncated half-space depth (10H)
 
         # Wavenumber sweep (non-dimensional)
-        "k_min": 5,
-        "k_max":20,
-        "num_k": 10
+        "k_min": 0.06,
+        "k_max":0.1,
+        "num_k": 13
     },
 
     # --------------------------------------------------
