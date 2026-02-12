@@ -29,7 +29,7 @@ CONFIG = {
         "mu66_0": 6.47e9,           # Pa
         "rho_0": 3400.0,            # kg/m^3
         "P_0": 1.0e9,               # Initial stress (Pa)
-        "beta2":5,             # FG parameter
+        "beta2":10,             # FG parameter
             
         # Gravity
         "g": 9.81                   # m/s^2
