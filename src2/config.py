@@ -28,7 +28,7 @@ CONFIG = {
         "mu44_0": 5.3e9,           # Pa
         "mu66_0": 6.47e9,           # Pa
         "rho_0": 3400.0,            # kg/m^3
-        "P_0": 1.0e9,               # Initial stress (Pa)
+        "P_0": 1.0e8,               # Initial stress (Pa)
         "beta2":10,             # FG parameter
             
         # Gravity
@@ -39,13 +39,13 @@ CONFIG = {
     # Geometry & Dispersion Settings
     # --------------------------------------------------
     "GEOMETRY": {
-        "H": 5,                   # Non-dimensional layer thickness
+        "H": 6,                   # 5 Non-dimensional layer thickness
         "L": 29*0.1,                  # Truncated half-space depth (10H)
 
         # Wavenumber sweep (non-dimensional)
-        "k_min": 0.06,
-        "k_max":0.1,
-        "num_k": 13
+        "k_min": 0.061,
+        "k_max":0.1167,
+        "num_k": 14
     },
 
     # --------------------------------------------------
