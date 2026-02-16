@@ -133,12 +133,12 @@ def total_loss(
     w_bc  =1.0,
     w_int = 1,
     w_far = 0.1,
-    w_amp = 1.0,
+    w_amp = 0.5,
 ):
     """
     Total PINN loss for dispersion analysis (all terms non-dimensional)
     """
-    # --------------------------------------------------
+ # --------------------------------------------------
 # Amplitude fixing at top surface (CRITICAL)
 # --------------------------------------------------
     pred_top = model_layer(z_top)
