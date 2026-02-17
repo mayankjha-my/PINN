@@ -42,7 +42,7 @@ def get_all_networks():
     net_layer = PINN(
         in_dim=1,
         out_dim=2,
-        width=128,
+        width=50,
         depth=8
     )
 
@@ -50,7 +50,7 @@ def get_all_networks():
     net_halfspace = PINN(
         in_dim=1,
         out_dim=1,
-        width=128,
+        width=50,
         depth=8
     )
 
