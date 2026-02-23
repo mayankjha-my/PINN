@@ -68,16 +68,16 @@ def get_all_networks(activation="tanh"):
     net_layer = PINN(
         in_dim=1,
         out_dim=2,
-        width=64,
-        depth=5,
+        width=50,
+        depth=8,
         activation=activation
     )
 
     net_halfspace = PINN(
         in_dim=1,
         out_dim=1,
-        width=64,
-        depth=5,
+        width=50,
+        depth=8,
         activation=activation
     )
 
