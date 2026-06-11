@@ -43,11 +43,11 @@ CONFIG = {
     # --------------------------------------------------
     "GEOMETRY": {
         "H": 0.1,                   # Non-dimensional layer thickness
-        "L": 29*0.1,                  # Truncated half-space depth (10H)
+        "L": 29*0.1,                # Truncated half-space depth (10H)
 
-        # Wavenumber sweep (non-dimensional)
-        "k_min": 5,
-        "k_max": 10,
+        # Wavenumber sweep (non-dimensional) - use FEM's kH range
+        "k_min": 0.5,
+        "k_max": 1.0,
         "num_k": 10
     },
 
